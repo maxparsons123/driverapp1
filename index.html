@@ -31,131 +31,133 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
-
   <script>
-    document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', () => {
 
-      const DRIVER_ID = "driver-01";
-      const MQTT_BROKER = "wss://broker.hivemq.com:8884/mqtt";
-      const REQUEST_TOPIC = "pubs/requests/+";
-      const LOCATION_TOPIC = `drivers/${DRIVER_ID}/location`;
+  // ===== Driver Registration =====
+  let DRIVER_ID = prompt("Enter your driver name or ID:");
+  if(!DRIVER_ID) DRIVER_ID = 'driver-' + Math.random().toString(16).substr(2,6);
 
-      let driverCoords = null;
-      let map = null;
-      let driverMarker = null;
-      let pickupMarker = null;
-      let routeLine = null;
-      let client = null;
-      let currentJob = null;
+  const MQTT_BROKER = "wss://broker.hivemq.com:8884/mqtt"; 
+  const REQUEST_TOPIC = "pubs/requests/+";
+  const LOCATION_TOPIC = `drivers/${DRIVER_ID}/location`;
 
-      const statusEl = document.getElementById('status');
-      const jobPanel = document.getElementById('jobPanel');
-      const jobInfo = document.getElementById('jobInfo');
+  let driverCoords = null;
+  let map = null;
+  let driverMarker = null;
+  let pickupMarker = null;
+  let routeLine = null;
+  let client = null;
+  let currentJob = null;
 
-      function logStatus(msg){ statusEl.textContent = msg; }
+  const statusEl = document.getElementById('status');
+  const jobPanel = document.getElementById('jobPanel');
+  const jobInfo = document.getElementById('jobInfo');
 
-      function connectMQTT(){
-        logStatus("Connecting to MQTT...");
-        client = mqtt.connect(MQTT_BROKER, {
-          clientId: 'driver-' + DRIVER_ID + '-' + Math.random().toString(16).substr(2,8),
-          clean: true,
-          reconnectPeriod: 1000
-        });
+  function logStatus(msg){ statusEl.textContent = msg; }
 
-        client.on('connect', ()=>{
-          logStatus("Connected to MQTT");
-          client.subscribe(REQUEST_TOPIC);
-          publishLocation();
-        });
+  // ===== MQTT =====
+  function connectMQTT(){
+    logStatus("Connecting to MQTT...");
+    client = mqtt.connect(MQTT_BROKER, {
+      clientId: 'driver-' + DRIVER_ID + '-' + Math.random().toString(16).substr(2,8),
+      clean: true,
+      reconnectPeriod: 1000
+    });
 
-        client.on('message', (topic, message)=>{
-          try{
-            const data = JSON.parse(message.toString());
-            if(topic.startsWith("pubs/requests/")){
-              currentJob = data;
-              jobInfo.textContent = `Pickup from ${data.pubName} (${data.lat.toFixed(5)}, ${data.lng.toFixed(5)})`;
-              jobPanel.style.display = 'flex';
+    client.on('connect', ()=>{
+      logStatus("Connected to MQTT");
+      client.subscribe(REQUEST_TOPIC);
+      publishLocation();
+    });
 
-              if(pickupMarker) map.removeLayer(pickupMarker);
-              pickupMarker = L.marker([data.lat, data.lng]).addTo(map);
+    client.on('message', (topic, message)=>{
+      try{
+        const data = JSON.parse(message.toString());
+        if(topic.startsWith("pubs/requests/")){
+          currentJob = data;
+          jobInfo.textContent = `Pickup from ${data.pubName} (${data.lat.toFixed(5)}, ${data.lng.toFixed(5)})`;
+          jobPanel.style.display = 'flex';
 
-              if(routeLine) map.removeLayer(routeLine);
-              if(driverCoords)
-                routeLine = L.polyline([[driverCoords.lat, driverCoords.lng],[data.lat, data.lng]], {color:'blue'}).addTo(map);
-            }
-          } catch(e){}
-        });
-      }
+          if(pickupMarker) map.removeLayer(pickupMarker);
+          pickupMarker = L.marker([data.lat, data.lng]).addTo(map);
 
-      function publishLocation(){
-        if(!client || !driverCoords) return;
-        const payload = { driver: DRIVER_ID, lat: driverCoords.lat, lng: driverCoords.lng, status:'idle', ts:Date.now() };
-        client.publish(LOCATION_TOPIC, JSON.stringify(payload));
-      }
+          if(routeLine) map.removeLayer(routeLine);
+          if(driverCoords)
+            routeLine = L.polyline([[driverCoords.lat, driverCoords.lng],[data.lat, data.lng]], {color:'blue'}).addTo(map);
+        }
+      } catch(e){ console.error(e); }
+    });
+  }
 
-      function respondToJob(accepted){
-        if(!currentJob || !client) return;
-        const payload = { job: currentJob.job, driver: DRIVER_ID, status: accepted ? "accepted" : "rejected", ts:Date.now() };
-        client.publish(`jobs/${currentJob.job}/status`, JSON.stringify(payload));
-        jobPanel.style.display = 'none';
-        if(pickupMarker){ map.removeLayer(pickupMarker); pickupMarker = null; }
-        if(routeLine){ map.removeLayer(routeLine); routeLine = null; }
-        currentJob = null;
-      }
+  function publishLocation(){
+    if(!client || !driverCoords) return;
+    const payload = { driver: DRIVER_ID, lat: driverCoords.lat, lng: driverCoords.lng, status:'idle', ts:Date.now() };
+    client.publish(LOCATION_TOPIC, JSON.stringify(payload));
+  }
 
-      document.getElementById('acceptBtn').addEventListener('click', ()=> respondToJob(true));
-      document.getElementById('rejectBtn').addEventListener('click', ()=> respondToJob(false));
+  function respondToJob(accepted){
+    if(!currentJob || !client) return;
+    const payload = { job: currentJob.job, driver: DRIVER_ID, status: accepted ? "accepted" : "rejected", ts:Date.now() };
+    client.publish(`jobs/${currentJob.job}/status`, JSON.stringify(payload));
+    jobPanel.style.display = 'none';
+    if(pickupMarker){ map.removeLayer(pickupMarker); pickupMarker = null; }
+    if(routeLine){ map.removeLayer(routeLine); routeLine = null; }
+    currentJob = null;
+  }
 
-      // ===== GPS Initialization =====
-      if(!('geolocation' in navigator)){
-        alert("Geolocation not supported.");
-        logStatus("Geolocation not supported.");
-        return;
-      }
+  document.getElementById('acceptBtn').addEventListener('click', ()=> respondToJob(true));
+  document.getElementById('rejectBtn').addEventListener('click', ()=> respondToJob(false));
 
-      navigator.geolocation.getCurrentPosition(
+  // ===== GPS =====
+  if(!('geolocation' in navigator)){
+    alert("Geolocation not supported.");
+    logStatus("Geolocation not supported.");
+    return;
+  }
+
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      const lat = pos.coords.latitude;
+      const lng = pos.coords.longitude;
+      driverCoords = {lat,lng};
+
+      map = L.map('map').setView([lat,lng], 15);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{ maxZoom:19 }).addTo(map);
+      driverMarker = L.marker([lat,lng], { title: DRIVER_ID }).addTo(map);
+
+      connectMQTT(); // connect after GPS
+
+      navigator.geolocation.watchPosition(
         pos => {
           const lat = pos.coords.latitude;
           const lng = pos.coords.longitude;
           driverCoords = {lat,lng};
+          driverMarker.setLatLng([lat,lng]);
+          map.setView([lat,lng]);
+          publishLocation();
 
-          map = L.map('map').setView([lat,lng], 15);
-          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{ maxZoom:19 }).addTo(map);
-          driverMarker = L.marker([lat,lng], { title: DRIVER_ID }).addTo(map);
+          if(currentJob && routeLine){
+            routeLine.setLatLngs([[lat,lng],[currentJob.lat, currentJob.lng]]);
+          }
 
-          connectMQTT(); // only connect after GPS available
-
-          // Watch position
-          navigator.geolocation.watchPosition(
-            pos => {
-              const lat = pos.coords.latitude;
-              const lng = pos.coords.longitude;
-              driverCoords = {lat,lng};
-              driverMarker.setLatLng([lat,lng]);
-              map.setView([lat,lng]);
-              publishLocation();
-
-              if(currentJob && routeLine){
-                routeLine.setLatLngs([[lat,lng],[currentJob.lat, currentJob.lng]]);
-              }
-
-              logStatus(`GPS: ${lat.toFixed(5)}, ${lng.toFixed(5)}`);
-            },
-            err => {
-              logStatus("GPS error: " + err.message);
-            },
-            { enableHighAccuracy:true, maximumAge:5000, timeout:10000 }
-          );
+          logStatus(`GPS: ${lat.toFixed(5)}, ${lng.toFixed(5)}`);
         },
         err => {
-          if(err.code === 1) alert("GPS permission denied. Please enable location access.");
-          else alert("GPS error: " + err.message);
-          logStatus("GPS unavailable");
+          logStatus("GPS error: " + err.message);
         },
-        { enableHighAccuracy:true, timeout:10000 }
+        { enableHighAccuracy:true, maximumAge:5000, timeout:10000 }
       );
+    },
+    err => {
+      if(err.code === 1) alert("GPS permission denied. Please enable location access.");
+      else alert("GPS error: " + err.message);
+      logStatus("GPS unavailable");
+    },
+    { enableHighAccuracy:true, timeout:10000 }
+  );
 
-    });
+});
   </script>
 </body>
 </html>
