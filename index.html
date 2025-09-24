@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Driver App</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <style>
+    body { margin:0; font-family:system-ui, -apple-system, "Segoe UI", sans-serif; background:#f7fafc; display:flex; flex-direction:column; height:100vh; }
+    header { background:#1f6feb; color:white; padding:10px; text-align:center; font-weight:700; font-size:18px; }
+    #map { flex:1; }
+    #status { text-align:center; padding:8px; font-size:14px; color:#555; }
+    #jobPanel { padding:12px; background:white; border-top:1px solid #ddd; display:none; flex-direction:column; gap:8px; }
+    #jobPanel h2 { margin:0; font-size:18px; }
+    .btn { padding:12px; font-size:16px; border:none; border-radius:8px; cursor:pointer; }
+    .accept { background:#28a745; color:white; }
+    .reject { background:#dc3545; color:white; }
+  </style>
+</head>
+<body>
+  <header>Driver App</header>
+  <div id="map"></div>
+  <div id="status">Waiting for GPS...</div>
+
+  <div id="jobPanel">
+    <h2>New Job Request</h2>
+    <div id="jobInfo">Pickup: ...</div>
+    <button class="btn accept" id="acceptBtn">Accept</button>
+    <button class="btn reject" id="rejectBtn">Reject</button>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+
+      const DRIVER_ID = "driver-01";
+      const MQTT_BROKER = "wss://broker.hivemq.com:8884/mqtt";
+      const REQUEST_TOPIC = "pubs/requests/+";
+      const LOCATION_TOPIC = `drivers/${DRIVER_ID}/location`;
+
+      let driverCoords = null;
+      let map = null;
+      let driverMarker = null;
+      let pickupMarker = null;
+      let routeLine = null;
+      let client = null;
+      let currentJob = null;
+
+      const statusEl = document.getElementById('status');
+      const jobPanel = document.getElementById('jobPanel');
+      const jobInfo = document.getElementById('jobInfo');
+
+      function logStatus(msg){ statusEl.textContent = msg; }
+
+      function connectMQTT(){
+        logStatus("Connecting to MQTT...");
+        client = mqtt.connect(MQTT_BROKER, {
+          clientId: 'driver-' + DRIVER_ID + '-' + Math.random().toString(16).substr(2,8),
+          clean: true,
+          reconnectPeriod: 1000
+        });
+
+        client.on('connect', ()=>{
+          logStatus("Connected to MQTT");
+          client.subscribe(REQUEST_TOPIC);
+          publishLocation();
+        });
+
+        client.on('message', (topic, message)=>{
+          try{
+            const data = JSON.parse(message.toString());
+            if(topic.startsWith("pubs/requests/")){
+              currentJob = data;
+              jobInfo.textContent = `Pickup from ${data.pubName} (${data.lat.toFixed(5)}, ${data.lng.toFixed(5)})`;
+              jobPanel.style.display = 'flex';
+
+              if(pickupMarker) map.removeLayer(pickupMarker);
+              pickupMarker = L.marker([data.lat, data.lng]).addTo(map);
+
+              if(routeLine) map.removeLayer(routeLine);
+              if(driverCoords)
+                routeLine = L.polyline([[driverCoords.lat, driverCoords.lng],[data.lat, data.lng]], {color:'blue'}).addTo(map);
+            }
+          } catch(e){}
+        });
+      }
+
+      function publishLocation(){
+        if(!client || !driverCoords) return;
+        const payload = { driver: DRIVER_ID, lat: driverCoords.lat, lng: driverCoords.lng, status:'idle', ts:Date.now() };
+        client.publish(LOCATION_TOPIC, JSON.stringify(payload));
+      }
+
+      function respondToJob(accepted){
+        if(!currentJob || !client) return;
+        const payload = { job: currentJob.job, driver: DRIVER_ID, status: accepted ? "accepted" : "rejected", ts:Date.now() };
+        client.publish(`jobs/${currentJob.job}/status`, JSON.stringify(payload));
+        jobPanel.style.display = 'none';
+        if(pickupMarker){ map.removeLayer(pickupMarker); pickupMarker = null; }
+        if(routeLine){ map.removeLayer(routeLine); routeLine = null; }
+        currentJob = null;
+      }
+
+      document.getElementById('acceptBtn').addEventListener('click', ()=> respondToJob(true));
+      document.getElementById('rejectBtn').addEventListener('click', ()=> respondToJob(false));
+
+      // ===== GPS Initialization =====
+      if(!('geolocation' in navigator)){
+        alert("Geolocation not supported.");
+        logStatus("Geolocation not supported.");
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        pos => {
+          const lat = pos.coords.latitude;
+          const lng = pos.coords.longitude;
+          driverCoords = {lat,lng};
+
+          map = L.map('map').setView([lat,lng], 15);
+          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{ maxZoom:19 }).addTo(map);
+          driverMarker = L.marker([lat,lng], { title: DRIVER_ID }).addTo(map);
+
+          connectMQTT(); // only connect after GPS available
+
+          // Watch position
+          navigator.geolocation.watchPosition(
+            pos => {
+              const lat = pos.coords.latitude;
+              const lng = pos.coords.longitude;
+              driverCoords = {lat,lng};
+              driverMarker.setLatLng([lat,lng]);
+              map.setView([lat,lng]);
+              publishLocation();
+
+              if(currentJob && routeLine){
+                routeLine.setLatLngs([[lat,lng],[currentJob.lat, currentJob.lng]]);
+              }
+
+              logStatus(`GPS: ${lat.toFixed(5)}, ${lng.toFixed(5)}`);
+            },
+            err => {
+              logStatus("GPS error: " + err.message);
+            },
+            { enableHighAccuracy:true, maximumAge:5000, timeout:10000 }
+          );
+        },
+        err => {
+          if(err.code === 1) alert("GPS permission denied. Please enable location access.");
+          else alert("GPS error: " + err.message);
+          logStatus("GPS unavailable");
+        },
+        { enableHighAccuracy:true, timeout:10000 }
+      );
+
+    });
+  </script>
+</body>
+</html>
