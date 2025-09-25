@@ -363,6 +363,806 @@ document.addEventListener('DOMContentLoaded', () => {
   const DRIVERS_LOCATION_TOPIC = "drivers/+/location";
   const CHAT_GROUP_TOPIC = "chat/group";
   const CHAT_PRIVATE_TOPIC = `chat/private/${DRIVER_ID}/+`;
+  const JOB_RESULT_TOPIC = `jobs/+/result/${DRIVER_ID}`; // ← NEW: Result topic
+
+  let driverCoords = null;
+  let map = null;
+  let driverMarker = null;
+  let pickupMarker = null;
+  let routeLine = null;
+  let client = null;
+  let currentJob = null;
+  let currentChat = null;
+  let isChatOpen = false;
+
+  // Other drivers tracking
+  const otherDrivers = {};
+  const driverStatus = {};
+  const chatMessages = {
+    group: JSON.parse(localStorage.getItem(`chat_group_${DRIVER_ID}`)) || []
+  };
+  const unreadCounts = {
+    group: 0
+  };
+
+  // Heading tracking
+  let prevCoords = null;
+  let heading = 0;
+  let useCompass = false;
+  let gpsWatchId = null;
+
+  // DOM Elements
+  const statusEl = document.getElementById('status');
+  const jobPanel = document.getElementById('jobPanel');
+  const jobInfo = document.getElementById('jobInfo');
+  const chatPanel = document.getElementById('chatPanel');
+  const chatTitle = document.getElementById('chatTitle');
+  const chatList = document.getElementById('chatList');
+  const chatMessagesEl = document.getElementById('chatMessages');
+  const chatInput = document.getElementById('chatInput');
+  const chatInputContainer = document.getElementById('chatInputContainer');
+  const chatContent = document.getElementById('chatContent');
+  
+  // ===== CHAT TOGGLE FUNCTION =====
+  function toggleChat() {
+    isChatOpen = !isChatOpen;
+    if (isChatOpen) {
+      chatPanel.classList.add('active');
+      updateChatList();
+    } else {
+      chatPanel.classList.remove('active');
+    }
+  }
+
+  // ===== Chat UI Management =====
+  function openChat(chatId) {
+    currentChat = chatId;
+    chatList.style.display = 'none';
+    chatMessagesEl.style.display = 'flex';
+    chatInputContainer.style.display = 'flex';
+    
+    if (chatId === 'group') {
+      chatTitle.textContent = 'Group Chat';
+    } else {
+      chatTitle.textContent = `Chat with ${chatId}`;
+    }
+    
+    unreadCounts[chatId] = 0;
+    updateChatList();
+    renderChatMessages();
+    chatInput.focus();
+  }
+
+  function showChatList() {
+    chatList.style.display = 'block';
+    chatMessagesEl.style.display = 'none';
+    chatInputContainer.style.display = 'none';
+    currentChat = null;
+    chatTitle.textContent = 'Chats';
+    updateChatList();
+  }
+
+  function renderChatMessages() {
+    chatMessagesEl.innerHTML = '';
+    const messages = chatMessages[currentChat] || [];
+    
+    messages.forEach(msg => {
+      const messageEl = document.createElement('div');
+      messageEl.className = `message ${msg.sender === DRIVER_ID ? 'sent' : 'received'}`;
+      messageEl.innerHTML = `
+        ${msg.text}
+        <div class="message-info">
+          <span>${msg.sender}</span>
+          <span>${new Date(msg.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+        </div>
+      `;
+      chatMessagesEl.appendChild(messageEl);
+    });
+    
+    chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
+  }
+
+  function saveChatMessages() {
+    if (currentChat) {
+      localStorage.setItem(`chat_${currentChat}_${DRIVER_ID}`, JSON.stringify(chatMessages[currentChat] || []));
+    }
+    localStorage.setItem(`chat_group_${DRIVER_ID}`, JSON.stringify(chatMessages.group || []));
+  }
+
+  function addMessage(chatId, sender, text, timestamp = Date.now()) {
+    if (!chatMessages[chatId]) {
+      chatMessages[chatId] = [];
+      unreadCounts[chatId] = 0;
+    }
+    
+    chatMessages[chatId].push({ sender, text, timestamp });
+    if (chatMessages[chatId].length > 50) {
+      chatMessages[chatId] = chatMessages[chatId].slice(-50);
+    }
+    
+    if (!isChatOpen || currentChat !== chatId) {
+      unreadCounts[chatId] = (unreadCounts[chatId] || 0) + 1;
+    }
+    
+    saveChatMessages();
+    updateChatList();
+    
+    if (currentChat === chatId) {
+      renderChatMessages();
+    }
+  }
+
+  function updateChatList() {
+    chatList.innerHTML = `
+      <div class="contact-item" data-chat="group">
+        <div class="other-driver-icon" style="background:#6f42c1;">GC</div>
+        <div>
+          <div class="contact-name">Group Chat</div>
+          <div class="contact-status">All drivers</div>
+        </div>
+        ${unreadCounts.group > 0 ? `<div class="unread-badge">${unreadCounts.group}</div>` : ''}
+      </div>
+    `;
+    
+    Object.keys(otherDrivers).forEach(driverId => {
+      const isOnline = (Date.now() - (driverStatus[driverId] || 0)) < 60000;
+      const color = getColorForDriver(driverId);
+      const unread = unreadCounts[driverId] || 0;
+      
+      const contactEl = document.createElement('div');
+      contactEl.className = 'contact-item';
+      contactEl.dataset.chat = driverId;
+      contactEl.innerHTML = `
+        <div class="other-driver-icon" style="background:${color}">${driverId.substring(0,2).toUpperCase()}</div>
+        <div>
+          <div class="contact-name">${driverId}</div>
+          <div class="contact-status">${isOnline ? 'Online' : 'Offline'}</div>
+        </div>
+        ${unread > 0 ? `<div class="unread-badge">${unread}</div>` : ''}
+      `;
+      contactEl.addEventListener('click', () => openChat(driverId));
+      chatList.appendChild(contactEl);
+    });
+  }
+
+  // ===== Compass Handling =====
+  function initCompass() {
+    if (typeof DeviceOrientationEvent !== 'undefined') {
+      if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+        DeviceOrientationEvent.requestPermission()
+          .then(permissionState => {
+            if (permissionState === 'granted') {
+              window.addEventListener('deviceorientation', handleOrientation);
+              useCompass = true;
+            }
+          })
+          .catch(console.error);
+      } else {
+        try {
+          window.addEventListener('deviceorientation', handleOrientation);
+          useCompass = true;
+        } catch (err) {
+          console.warn("Compass setup error:", err);
+        }
+      }
+    }
+  }
+
+  function handleOrientation(event) {
+    if (!event) return;
+    let alpha = null;
+    if (event.webkitCompassHeading !== undefined) {
+      alpha = event.webkitCompassHeading;
+    } else if (event.alpha !== undefined && event.absolute) {
+      alpha = event.alpha;
+    }
+    if (alpha !== null && !isNaN(alpha)) {
+      heading = (360 - alpha) % 360;
+      updateDriverRotation();
+    }
+  }
+
+  function updateDriverRotation() {
+    if (!driverMarker) return;
+    const iconDiv = driverMarker.getElement();
+    if (iconDiv) {
+      iconDiv.style.transform = `rotate(${heading}deg)`;
+    }
+  }
+
+  // ===== MQTT =====
+  function connectMQTT(){
+    statusEl.textContent = "Connecting to MQTT...";
+    client = mqtt.connect(MQTT_BROKER, {
+      clientId: 'driver-' + DRIVER_ID + '-' + Math.random().toString(16).substr(2,8),
+      clean: true,
+      reconnectPeriod: 1000
+    });
+
+    client.on('connect', ()=>{ 
+      statusEl.textContent = "Connected to MQTT";
+      client.subscribe(REQUEST_TOPIC);
+      client.subscribe(DRIVERS_LOCATION_TOPIC);
+      client.subscribe(CHAT_GROUP_TOPIC);
+      client.subscribe(CHAT_PRIVATE_TOPIC);
+      client.subscribe(JOB_RESULT_TOPIC); // ← SUBSCRIBE TO RESULT TOPIC
+      publishLocation();
+      
+      setInterval(cleanupOldDrivers, 30000);
+    });
+
+    client.on('message', (topic, message)=>{ 
+      try{
+        const data = JSON.parse(message.toString());
+        
+        if(topic.startsWith("pubs/requests/")){
+          currentJob = data;
+          jobInfo.textContent = `Pickup from ${data.pubName} (${data.lat.toFixed(5)}, ${data.lng.toFixed(5)})`;
+          jobPanel.style.display = 'flex';
+
+          if(pickupMarker) map.removeLayer(pickupMarker);
+          pickupMarker = L.marker([data.lat, data.lng], {
+            icon: L.divIcon({
+              className: 'pickup-icon',
+              html: '<div style="background:#ff7b00; width:24px; height:24px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:white; font-weight:bold; font-size:14px;">P</div>',
+              iconSize: [24, 24],
+              iconAnchor: [12, 12]
+            })
+          }).addTo(map);
+
+          if(routeLine) map.removeLayer(routeLine);
+          if(driverCoords)
+            routeLine = L.polyline([[driverCoords.lat, driverCoords.lng],[data.lat, data.lng]], {color:'#1f6feb', weight:4, opacity:0.7}).addTo(map);
+        }
+        
+        // Handle job result notifications
+        if(topic.startsWith("jobs/") && topic.endsWith(`/result/${DRIVER_ID}`)){
+          if(data.result === "won"){
+            statusEl.textContent = "✅ Job allocated! Pickup: " + currentJob?.pubName;
+          } else if(data.result === "lost"){
+            statusEl.textContent = "❌ Bid lost. Better luck next time!";
+          } else if(data.result === "too_late"){
+            statusEl.textContent = "⏰ Bid too late - job expired";
+          } else if(data.result === "not_allowed"){
+            statusEl.textContent = "🚫 Not authorized to bid on this job";
+          } else if(data.result === "job_timeout"){
+            statusEl.textContent = "⏰ Job expired - no valid bids received";
+          }
+        }
+        
+        // Keep existing /status handler for backward compatibility
+        if(topic.startsWith("jobs/") && topic.endsWith("/status")){
+          if(data.driver === DRIVER_ID){
+            if(data.status === "allocated"){
+              statusEl.textContent = "✅ Job allocated! Pickup: " + currentJob?.pubName;
+            } else if(data.status === "lost"){
+              statusEl.textContent = "❌ Bid lost. Better luck next time!";
+            }
+          }
+        }
+        
+        if(topic.startsWith("drivers/") && topic.endsWith("/location")){
+          const otherDriverId = topic.split('/')[1];
+          if(otherDriverId === DRIVER_ID) return;
+          
+          if(data.lat !== undefined && data.lng !== undefined) {
+            updateOtherDriverMarker(otherDriverId, data.lat, data.lng, data);
+            driverStatus[otherDriverId] = Date.now();
+            updateChatList();
+          }
+        }
+        
+        if(topic === CHAT_GROUP_TOPIC) {
+          addMessage('group', data.sender, data.text, data.timestamp);
+        }
+        
+        if(topic.startsWith(`chat/private/${DRIVER_ID}/`)) {
+          const senderId = topic.split('/')[3];
+          addMessage(senderId, senderId, data.text, data.timestamp);
+        }
+      } catch(e){ 
+        console.error("MQTT parse error:", e); 
+      }
+    });
+  }
+
+  function updateOtherDriverMarker(driverId, lat, lng, data) {
+    const now = Date.now();
+    
+    if (!otherDrivers[driverId]) {
+      const color = getColorForDriver(driverId);
+      const marker = L.marker([lat, lng], {
+        icon: L.divIcon({
+          className: 'other-driver-icon',
+          html: `<div class="other-driver-icon" style="background:${color}">${driverId.substring(0,2).toUpperCase()}</div>`,
+          iconSize: [32, 32],
+          iconAnchor: [16, 16]
+        }),
+        title: driverId
+      }).addTo(map);
+      
+      otherDrivers[driverId] = {
+        marker: marker,
+        lastUpdate: now,
+         data
+      };
+    } else {
+      otherDrivers[driverId].marker.setLatLng([lat, lng]);
+      otherDrivers[driverId].lastUpdate = now;
+      otherDrivers[driverId].data = data;
+    }
+  }
+
+  function getColorForDriver(driverId) {
+    let hash = 0;
+    for (let i = 0; i < driverId.length; i++) {
+      hash = driverId.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const c = (hash & 0x00FFFFFF).toString(16).toUpperCase();
+    return "#" + "00000".substring(0, 6 - c.length) + c;
+  }
+
+  function cleanupOldDrivers() {
+    const now = Date.now();
+    const staleDrivers = [];
+    
+    for (const driverId in otherDrivers) {
+      if (now - otherDrivers[driverId].lastUpdate > 60000) {
+        staleDrivers.push(driverId);
+      }
+    }
+    
+    staleDrivers.forEach(driverId => {
+      map.removeLayer(otherDrivers[driverId].marker);
+      delete otherDrivers[driverId];
+      delete driverStatus[driverId];
+      delete unreadCounts[driverId];
+    });
+    
+    updateChatList();
+  }
+
+  function publishLocation(){
+    if(!client || !driverCoords) return;
+    const payload = { 
+      driver: DRIVER_ID, 
+      lat: driverCoords.lat, 
+      lng: driverCoords.lng, 
+      status:'idle', 
+      ts:Date.now(),
+      heading: Math.round(heading)
+    };
+    client.publish(LOCATION_TOPIC, JSON.stringify(payload));
+  }
+
+  function sendChatMessage() {
+    const text = chatInput.value.trim();
+    if (!text || !currentChat) return;
+    
+    if (currentChat === 'group') {
+      const payload = { sender: DRIVER_ID, text, timestamp: Date.now() };
+      client.publish(CHAT_GROUP_TOPIC, JSON.stringify(payload));
+    } else {
+      const payload = { sender: DRIVER_ID, text, timestamp: Date.now() };
+      client.publish(`chat/private/${currentChat}/${DRIVER_ID}`, JSON.stringify(payload));
+    }
+    
+    addMessage(currentChat, DRIVER_ID, text);
+    chatInput.value = '';
+  }
+
+  // ===== CORRECTED: Only publish to /accept for bidding =====
+  function respondToJob(accepted){
+    if(!currentJob || !client) return;
+    
+    if(accepted){
+      if (!driverCoords) {
+        statusEl.textContent = "❌ GPS not ready - cannot accept job";
+        return;
+      }
+      
+      // ONLY publish to /accept - never to /status with "assigned"
+      const payload = { 
+        driver: DRIVER_ID, 
+        lat: driverCoords.lat,
+        lng: driverCoords.lng
+      };
+      client.publish(`jobs/${currentJob.job}/accept`, JSON.stringify(payload));
+      statusEl.textContent = "✅ Bid sent for job " + currentJob.job;
+    } else {
+      // Only publish "rejected" status for rejections
+      const payload = { job: currentJob.job, driver: DRIVER_ID, status: "rejected", ts:Date.now() };
+      client.publish(`jobs/${currentJob.job}/status`, JSON.stringify(payload));
+      statusEl.textContent = "❌ Job rejected";
+    }
+    
+    jobPanel.style.display = 'none';
+    if(pickupMarker){ map.removeLayer(pickupMarker); pickupMarker = null; }
+    if(routeLine){ map.removeLayer(routeLine); routeLine = null; }
+    currentJob = null;
+  }
+
+  // ===== EVENT LISTENERS =====
+  document.getElementById('acceptBtn').addEventListener('click', () => respondToJob(true));
+  document.getElementById('rejectBtn').addEventListener('click', () => respondToJob(false));
+  document.getElementById('chatToggleBtn').addEventListener('click', toggleChat);
+  document.getElementById('chatCloseBtn').addEventListener('click', () => {
+    isChatOpen = false;
+    chatPanel.classList.remove('active');
+  });
+  document.getElementById('sendBtn').addEventListener('click', sendChatMessage);
+  chatInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') sendChatMessage();
+  });
+
+  document.addEventListener('click', (e) => {
+    if (isChatOpen && 
+        !chatPanel.contains(e.target) && 
+        e.target !== document.getElementById('chatToggleBtn')) {
+      isChatOpen = false;
+      chatPanel.classList.remove('active');
+    }
+  });
+
+  // ===== GPS & HEADING =====
+  if(!('geolocation' in navigator)){
+    alert("Geolocation not supported.");
+    statusEl.textContent = "Geolocation not supported.";
+    return;
+  }
+
+  initCompass();
+
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      const lat = pos.coords.latitude;
+      const lng = pos.coords.longitude;
+      driverCoords = {lat, lng};
+      prevCoords = {lat, lng};
+
+      map = L.map('map').setView([lat, lng], 15);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { 
+        maxZoom: 19,
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+      }).addTo(map);
+      
+      driverMarker = L.marker([lat, lng], { 
+        title: DRIVER_ID,
+        icon: L.divIcon({
+          className: 'driver-icon',
+          html: `<div class="driver-icon" style="background:#1f6feb;">${DRIVER_ID.substring(0,2).toUpperCase()}</div>`,
+          iconSize: [36, 36],
+          iconAnchor: [18, 18]
+        })
+      }).addTo(map);
+
+      connectMQTT();
+
+      gpsWatchId = navigator.geolocation.watchPosition(
+        pos => {
+          const lat = pos.coords.latitude;
+          const lng = pos.coords.longitude;
+          const speed = pos.coords.speed || 0;
+          
+          if (!useCompass || speed < 0.3) {
+            if (prevCoords && speed > 0.1) {
+              const dy = lat - prevCoords.lat;
+              const dx = lng - prevCoords.lng;
+              const newHeading = (Math.atan2(dx, dy) * 180 / Math.PI + 360) % 360;
+              heading = heading * 0.8 + newHeading * 0.2;
+            }
+            prevCoords = {lat, lng};
+          }
+
+          driverCoords = {lat, lng};
+          driverMarker.setLatLng([lat, lng]);
+          updateDriverRotation();
+          map.setView([lat, lng], 15);
+          publishLocation();
+          
+          if(currentJob && routeLine){
+            routeLine.setLatLngs([[lat, lng], [currentJob.lat, currentJob.lng]]);
+          }
+          
+          statusEl.textContent = `GPS: ${lat.toFixed(5)}, ${lng.toFixed(5)} | Heading: ${Math.round(heading)}° | Drivers: ${Object.keys(otherDrivers).length}`;
+        },
+        err => {
+          statusEl.textContent = "GPS error: " + err.message;
+        },
+        { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
+      );
+    },
+    err => {
+      if(err.code === 1) {
+        alert("GPS permission denied. Please enable location access.");
+        statusEl.textContent = "GPS permission denied";
+      } else {
+        alert("GPS error: " + err.message);
+        statusEl.textContent = "GPS unavailable: " + err.message;
+      }
+    },
+    { enableHighAccuracy: true, timeout: 10000 }
+  );
+
+});
+  </script>
+</body>
+</html>    #jobPanel { 
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: white;
+      padding: 16px;
+      border-top: 1px solid #ddd;
+      z-index: 1000;
+      box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+      display: none;
+    }
+    #jobPanel h2 { 
+      margin: 0 0 10px 0; 
+      font-size: 18px; 
+      color: #1f6feb;
+    }
+    .btn { 
+      padding: 14px; 
+      font-size: 16px; 
+      border: none;
+      border-radius: 8px; 
+      cursor: pointer; 
+      font-weight: 600;
+      width: 100%;
+    }
+    .accept { 
+      background: #28a745; 
+      color: white; 
+      margin-bottom: 8px;
+    }
+    .reject { 
+      background: #dc3545; 
+      color: white;
+    }
+    
+    /* Driver icons */
+    .driver-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: bold;
+      font-size: 12px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+      transition: transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+    .other-driver-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: bold;
+      font-size: 10px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+    }
+    
+    /* Chat panel */
+    #chatPanel {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 70vh;
+      background: white;
+      display: none;
+      flex-direction: column;
+      z-index: 2000;
+      box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+      transform: translateY(100%);
+      transition: transform 0.3s ease;
+    }
+    #chatPanel.active {
+      display: flex;
+      transform: translateY(0);
+    }
+    #chatHeader {
+      background: #000;
+      color: #FFD700;
+      padding: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-weight: 600;
+    }
+    #chatCloseBtn {
+      background: #FFD700;
+      color: #000;
+      border: none;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      cursor: pointer;
+      font-size: 18px;
+    }
+    #chatMessages {
+      flex: 1;
+      padding: 12px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .message {
+      max-width: 80%;
+      padding: 10px 12px;
+      border-radius: 18px;
+      font-size: 14px;
+      line-height: 1.4;
+      word-wrap: break-word;
+    }
+    .received {
+      background: #e9ecef;
+      align-self: flex-start;
+      border-bottom-left-radius: 4px;
+    }
+    .sent {
+      background: #000;
+      color: white;
+      align-self: flex-end;
+      border-bottom-right-radius: 4px;
+    }
+    .message-info {
+      font-size: 11px;
+      opacity: 0.7;
+      margin-top: 4px;
+      display: flex;
+      justify-content: space-between;
+    }
+    #chatInputContainer {
+      display: flex;
+      padding: 8px;
+      background: white;
+      border-top: 1px solid #eee;
+    }
+    #chatInput {
+      flex: 1;
+      padding: 12px;
+      border: 1px solid #ddd;
+      border-radius: 20px;
+      font-size: 15px;
+      outline: none;
+    }
+    #sendBtn {
+      background: #000;
+      color: #FFD700;
+      border: none;
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      margin-left: 8px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+    }
+    
+    /* Chat list */
+    #chatList {
+      flex: 1;
+      overflow-y: auto;
+    }
+    .contact-item {
+      padding: 14px 16px;
+      border-bottom: 1px solid #eee;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      cursor: pointer;
+    }
+    .contact-item:hover {
+      background: #f8f9fa;
+    }
+    .contact-name {
+      font-weight: 600;
+    }
+    .contact-status {
+      font-size: 12px;
+      color: #6c757d;
+    }
+    .contact-badge {
+      background: #28a745;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      margin-left: auto;
+    }
+    .offline {
+      background: #6c757d;
+    }
+    
+    .unread-badge {
+      background: #FFD700;
+      color: #000;
+      border-radius: 10px;
+      padding: 2px 6px;
+      font-size: 11px;
+      margin-left: 8px;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  
+  <!-- Black Cab Unite Header Banner -->
+  <div id="headerBanner">
+    <div id="appTitle">Black Cab Unite</div>
+    <button id="chatToggleBtn">💬</button>
+  </div>
+  
+  <!-- Status bar -->
+  <div id="status">Waiting for GPS...</div>
+
+  <!-- Job panel -->
+  <div id="jobPanel">
+    <h2>New Job Request</h2>
+    <div id="jobInfo">Pickup: ...</div>
+    <button class="btn accept" id="acceptBtn">Accept Job</button>
+    <button class="btn reject" id="rejectBtn">Reject</button>
+  </div>
+
+  <!-- Chat panel -->
+  <div id="chatPanel">
+    <div id="chatHeader">
+      <div id="chatTitle">Chats</div>
+      <button id="chatCloseBtn">×</button>
+    </div>
+    <div id="chatContent">
+      <div id="chatList">
+        <div class="contact-item" data-chat="group">
+          <div class="other-driver-icon" style="background:#6f42c1;">GC</div>
+          <div>
+            <div class="contact-name">Group Chat</div>
+            <div class="contact-status">All drivers</div>
+          </div>
+        </div>
+      </div>
+      <div id="chatMessages" style="display:none;"></div>
+    </div>
+    <div id="chatInputContainer" style="display:none;">
+      <input type="text" id="chatInput" placeholder="Type a message..." autocomplete="off">
+      <button id="sendBtn">➤</button>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+  <script>
+document.addEventListener('DOMContentLoaded', () => {
+
+  // ===== Driver Registration =====
+  let DRIVER_ID = localStorage.getItem('driver_id');
+  if(!DRIVER_ID) {
+    DRIVER_ID = prompt("Enter your driver name or ID:");
+    if(!DRIVER_ID) DRIVER_ID = 'driver-' + Math.random().toString(16).substr(2,6);
+    localStorage.setItem('driver_id', DRIVER_ID);
+  }
+
+  const MQTT_BROKER = "wss://broker.hivemq.com:8884/mqtt"; 
+  const REQUEST_TOPIC = "pubs/requests/+";
+  const LOCATION_TOPIC = `drivers/${DRIVER_ID}/location`;
+  const DRIVERS_LOCATION_TOPIC = "drivers/+/location";
+  const CHAT_GROUP_TOPIC = "chat/group";
+  const CHAT_PRIVATE_TOPIC = `chat/private/${DRIVER_ID}/+`;
 
   let driverCoords = null;
   let map = null;
@@ -867,4 +1667,5 @@ document.addEventListener('DOMContentLoaded', () => {
   </script>
 </body>
 </html>
+
 
