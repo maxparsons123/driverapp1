@@ -22,7 +22,7 @@
       z-index:1;
     }
     
-    /* Black Cab Unite Header Banner - 4 buttons */
+    /* Black Cab Unite Header Banner - Single Menu Button */
     #headerBanner {
       position: absolute;
       top: 0;
@@ -30,34 +30,43 @@
       right: 0;
       background: #000;
       color: #FFD700;
-      padding: 8px 0;
+      padding: 12px 16px;
       display: flex;
-      justify-content: space-around;
+      justify-content: space-between;
       align-items: center;
       z-index: 1001;
       box-shadow: 0 2px 8px rgba(0,0,0,0.3);
     }
-    .nav-btn {
-      background: transparent;
-      color: #FFD700;
-      border: none;
-      padding: 8px 12px;
-      border-radius: 6px;
-      cursor: pointer;
-      font-weight: 600;
-      font-size: 12px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 4px;
-      transition: background 0.2s;
-    }
-    .nav-btn:hover, .nav-btn.active {
-      background: rgba(255, 215, 0, 0.2);
-    }
-    .nav-icon {
+    #appTitle {
+      font-weight: 700;
       font-size: 18px;
+      letter-spacing: 0.5px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    #appTitle::before {
+      content: "🚕";
+      font-size: 20px;
+    }
+    #menuBtn {
+      background: #FFD700;
+      color: #000;
+      border: none;
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       font-weight: bold;
+      cursor: pointer;
+      z-index: 1002;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+      transition: transform 0.1s ease;
+    }
+    #menuBtn:active {
+      transform: scale(0.95);
     }
     
     /* Status bar at bottom */
@@ -141,8 +150,8 @@
       box-shadow: 0 1px 4px rgba(0,0,0,0.2);
     }
     
-    /* Overlay panels */
-    .overlay-panel {
+    /* Main Menu Panel */
+    #menuPanel {
       position: absolute;
       bottom: 0;
       left: 0;
@@ -156,40 +165,50 @@
       transform: translateY(100%);
       transition: transform 0.3s ease;
     }
-    .overlay-panel.active {
+    #menuPanel.active {
       display: flex;
       transform: translateY(0);
     }
-    .panel-header {
-      background: #000;
-      color: #FFD700;
-      padding: 12px;
+    
+    /* 4-Button Navigation Bar */
+    #menuNav {
       display: flex;
-      justify-content: space-between;
-      align-items: center;
-      font-weight: 600;
+      background: #f8f9fa;
+      border-bottom: 1px solid #eee;
     }
-    .panel-close-btn {
-      background: #FFD700;
-      color: #000;
-      border: none;
-      width: 36px;
-      height: 36px;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: bold;
-      cursor: pointer;
-      font-size: 18px;
-    }
-    .panel-content {
+    .menu-nav-btn {
       flex: 1;
-      overflow-y: auto;
-      padding: 12px;
+      background: transparent;
+      border: none;
+      padding: 12px 0;
+      font-weight: 600;
+      font-size: 14px;
+      color: #666;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .menu-nav-btn:hover {
+      background: #e9ecef;
+    }
+    .menu-nav-btn.active {
+      color: #1f6feb;
+      background: #e8f0fe;
+      border-bottom: 3px solid #1f6feb;
+    }
+    .menu-nav-btn .icon {
+      display: block;
+      font-size: 20px;
+      margin-bottom: 4px;
     }
     
-    /* Current Job Panel */
+    /* Menu Content Area */
+    #menuContent {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+    }
+    
+    /* Current Job Content */
     .current-job-info {
       padding: 16px;
       background: #e8f5e8;
@@ -215,7 +234,7 @@
       color: #666;
     }
     
-    /* Job History Panel */
+    /* Job History Content */
     .job-item {
       padding: 12px;
       border: 1px solid #eee;
@@ -265,7 +284,7 @@
     .status-completed { background: #e2e3e5; color: #41464b; }
     .status-lost, .status-rejected, .status-expired { background: #f8d7da; color: #842029; }
     
-    /* Chat panel */
+    /* Chat Content */
     #chatMessages {
       flex: 1;
       padding: 12px;
@@ -373,7 +392,7 @@
       font-weight: bold;
     }
     
-    /* Settings Panel */
+    /* Settings Content */
     .settings-group {
       margin-bottom: 20px;
     }
@@ -413,30 +432,16 @@
 <body>
   <div id="map"></div>
   
-  <!-- Black Cab Unite Header Banner - 4 Buttons -->
+  <!-- Black Cab Unite Header Banner - Single Menu Button -->
   <div id="headerBanner">
-    <button class="nav-btn active" id="currentJobBtn">
-      <div class="nav-icon">📍</div>
-      <div>Current Job</div>
-    </button>
-    <button class="nav-btn" id="jobHistoryBtn">
-      <div class="nav-icon">📋</div>
-      <div>Job History</div>
-    </button>
-    <button class="nav-btn" id="chatBtn">
-      <div class="nav-icon">💬</div>
-      <div>Chats</div>
-    </button>
-    <button class="nav-btn" id="settingsBtn">
-      <div class="nav-icon">⚙️</div>
-      <div>Settings</div>
-    </button>
+    <div id="appTitle">Black Cab Unite</div>
+    <button id="menuBtn">☰</button>
   </div>
   
   <!-- Status bar -->
   <div id="status">Waiting for GPS...</div>
 
-  <!-- Job panel (for new job requests) -->
+  <!-- Job panel -->
   <div id="jobPanel">
     <h2>New Job Request</h2>
     <div id="jobInfo">Pickup: ...</div>
@@ -444,71 +449,31 @@
     <button class="btn reject" id="rejectBtn">Reject</button>
   </div>
 
-  <!-- Current Job Panel -->
-  <div id="currentJobPanel" class="overlay-panel">
-    <div class="panel-header">
-      <div>Current Job</div>
-      <button class="panel-close-btn" id="currentJobCloseBtn">×</button>
+  <!-- Main Menu Panel -->
+  <div id="menuPanel">
+    <!-- 4-Button Navigation -->
+    <div id="menuNav">
+      <button class="menu-nav-btn active" data-view="currentJob">
+        <div class="icon">📍</div>
+        Current Job
+      </button>
+      <button class="menu-nav-btn" data-view="jobHistory">
+        <div class="icon">📋</div>
+        Job History
+      </button>
+      <button class="menu-nav-btn" data-view="chat">
+        <div class="icon">💬</div>
+        Chats
+      </button>
+      <button class="menu-nav-btn" data-view="settings">
+        <div class="icon">⚙️</div>
+        Settings
+      </button>
     </div>
-    <div class="panel-content" id="currentJobContent">
+    
+    <!-- Content Area -->
+    <div id="menuContent">
       <!-- Content will be populated dynamically -->
-    </div>
-  </div>
-
-  <!-- Job History Panel -->
-  <div id="jobHistoryPanel" class="overlay-panel">
-    <div class="panel-header">
-      <div>Job History</div>
-      <button class="panel-close-btn" id="jobHistoryCloseBtn">×</button>
-    </div>
-    <div class="panel-content" id="jobHistoryContent">
-      <!-- Jobs will be populated here -->
-    </div>
-  </div>
-
-  <!-- Chat Panel -->
-  <div id="chatPanel" class="overlay-panel">
-    <div class="panel-header">
-      <div id="chatTitle">Chats</div>
-      <button class="panel-close-btn" id="chatCloseBtn">×</button>
-    </div>
-    <div id="chatContent">
-      <div id="chatList">
-        <div class="contact-item" data-chat="group">
-          <div class="other-driver-icon" style="background:#6f42c1;">GC</div>
-          <div>
-            <div class="contact-name">Group Chat</div>
-            <div class="contact-status">All drivers</div>
-          </div>
-        </div>
-      </div>
-      <div id="chatMessages" style="display:none;"></div>
-    </div>
-    <div id="chatInputContainer" style="display:none;">
-      <input type="text" id="chatInput" placeholder="Type a message..." autocomplete="off">
-      <button id="sendBtn">➤</button>
-    </div>
-  </div>
-
-  <!-- Settings Panel -->
-  <div id="settingsPanel" class="overlay-panel">
-    <div class="panel-header">
-      <div>Settings</div>
-      <button class="panel-close-btn" id="settingsCloseBtn">×</button>
-    </div>
-    <div class="panel-content">
-      <div class="settings-group">
-        <div class="settings-label">Driver ID</div>
-        <input type="text" id="driverIdInput" class="settings-input" placeholder="Enter your driver ID">
-        <button class="settings-btn" id="saveDriverIdBtn">Save Driver ID</button>
-        <div class="settings-info">
-          Your current ID: <span id="currentDriverId">Loading...</span>
-        </div>
-      </div>
-      <div class="settings-group">
-        <div class="settings-label">Clear Job History</div>
-        <button class="settings-btn" id="clearJobsBtn" style="background:#dc3545;">Clear All Jobs</button>
-      </div>
     </div>
   </div>
 
@@ -525,7 +490,7 @@ document.addEventListener('DOMContentLoaded', () => {
     return /^[a-zA-Z0-9_-]+$/.test(id);
   }
   
-  if(!DRIVER_ID || !validateDriverId(DIVER_ID)) {
+  if(!DRIVER_ID || !validateDriverId(DRIVER_ID)) {
     while (!DRIVER_ID || !validateDriverId(DRIVER_ID)) {
       DRIVER_ID = prompt("Enter your driver name or ID (letters, numbers, hyphens only):");
       if (DRIVER_ID === null) {
@@ -552,7 +517,8 @@ document.addEventListener('DOMContentLoaded', () => {
   let client = null;
   let currentJob = null;
   let currentChat = null;
-  let activePanel = null; // 'currentJob', 'jobHistory', 'chat', 'settings'
+  let isMenuOpen = false;
+  let currentView = 'currentJob';
 
   // Other drivers tracking
   const otherDrivers = {};
@@ -577,72 +543,155 @@ document.addEventListener('DOMContentLoaded', () => {
   const statusEl = document.getElementById('status');
   const jobPanel = document.getElementById('jobPanel');
   const jobInfo = document.getElementById('jobInfo');
-  const currentJobPanel = document.getElementById('currentJobPanel');
-  const currentJobContent = document.getElementById('currentJobContent');
-  const jobHistoryPanel = document.getElementById('jobHistoryPanel');
-  const jobHistoryContent = document.getElementById('jobHistoryContent');
-  const chatPanel = document.getElementById('chatPanel');
-  const chatTitle = document.getElementById('chatTitle');
-  const chatList = document.getElementById('chatList');
-  const chatMessagesEl = document.getElementById('chatMessages');
-  const chatInput = document.getElementById('chatInput');
-  const chatInputContainer = document.getElementById('chatInputContainer');
-  const chatContent = document.getElementById('chatContent');
-  const settingsPanel = document.getElementById('settingsPanel');
-  const driverIdInput = document.getElementById('driverIdInput');
-  const currentDriverId = document.getElementById('currentDriverId');
+  const menuPanel = document.getElementById('menuPanel');
+  const menuContent = document.getElementById('menuContent');
+  const menuNavBtns = document.querySelectorAll('.menu-nav-btn');
 
-  // Update current driver ID display
-  currentDriverId.textContent = DRIVER_ID;
-  driverIdInput.value = DRIVER_ID;
-
-  // ===== Panel Navigation =====
-  function showPanel(panelName) {
-    // Hide all panels
-    currentJobPanel.classList.remove('active');
-    jobHistoryPanel.classList.remove('active');
-    chatPanel.classList.remove('active');
-    settingsPanel.classList.remove('active');
-    
-    // Update button states
-    document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
-    
-    // Show selected panel
-    if (panelName === 'currentJob') {
-      currentJobPanel.classList.add('active');
-      document.getElementById('currentJobBtn').classList.add('active');
-      renderCurrentJob();
-    } else if (panelName === 'jobHistory') {
-      jobHistoryPanel.classList.add('active');
-      document.getElementById('jobHistoryBtn').classList.add('active');
-      renderJobHistory();
-    } else if (panelName === 'chat') {
-      chatPanel.classList.add('active');
-      document.getElementById('chatBtn').classList.add('active');
-      showChatList();
-    } else if (panelName === 'settings') {
-      settingsPanel.classList.add('active');
-      document.getElementById('settingsBtn').classList.add('active');
+  // ===== SMOOTHED GPS TRACKING =====
+  class SmoothedGPS {
+    constructor() {
+      this.filteredLat = null;
+      this.filteredLng = null;
+      this.velocityLat = 0;
+      this.velocityLng = 0;
+      this.lastTimestamp = null;
+      this.minDistanceThreshold = 5; // meters - only update if moved more than this
+      this.maxSpeed = 30; // m/s (108 km/h) - max realistic speed
     }
     
-    activePanel = panelName;
+    // Haversine distance in meters
+    distance(lat1, lng1, lat2, lng2) {
+      const R = 6371000; // Earth radius in meters
+      const toRad = x => x * Math.PI / 180;
+      const φ1 = toRad(lat1);
+      const φ2 = toRad(lat2);
+      const Δφ = toRad(lat2 - lat1);
+      const Δλ = toRad(lng2 - lng1);
+      const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+                Math.cos(φ1) * Math.cos(φ2) *
+                Math.sin(Δλ/2) * Math.sin(Δλ/2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      return R * c;
+    }
+    
+    // Kalman filter for position smoothing
+    kalmanFilter(newLat, newLng, timestamp) {
+      if (this.lastTimestamp === null) {
+        // First reading - initialize
+        this.filteredLat = newLat;
+        this.filteredLng = newLng;
+        this.lastTimestamp = timestamp;
+        return { lat: newLat, lng: newLng };
+      }
+      
+      const dt = (timestamp - this.lastTimestamp) / 1000; // seconds
+      this.lastTimestamp = timestamp;
+      
+      if (dt <= 0) {
+        return { lat: this.filteredLat, lng: this.filteredLng };
+      }
+      
+      // Predict step - assume constant velocity
+      const predictedLat = this.filteredLat + this.velocityLat * dt;
+      const predictedLng = this.filteredLng + this.velocityLng * dt;
+      
+      // Measurement residual
+      const residualLat = newLat - predictedLat;
+      const residualLng = newLng - predictedLng;
+      
+      // Calculate distance moved
+      const distanceMoved = this.distance(predictedLat, predictedLng, newLat, newLng);
+      const speed = distanceMoved / dt;
+      
+      // Adaptive Kalman gain based on speed and confidence
+      let kalmanGain;
+      if (speed > this.maxSpeed) {
+        // Likely GPS error - trust prediction more
+        kalmanGain = 0.1;
+      } else if (speed < 0.5) {
+        // Nearly stationary - be conservative
+        kalmanGain = 0.3;
+      } else {
+        // Normal movement
+        kalmanGain = 0.6;
+      }
+      
+      // Update step
+      const updatedLat = predictedLat + kalmanGain * residualLat;
+      const updatedLng = predictedLng + kalmanGain * residualLng;
+      
+      // Update velocity
+      this.velocityLat = (updatedLat - this.filteredLat) / dt;
+      this.velocityLng = (updatedLng - this.filteredLng) / dt;
+      
+      // Apply minimum distance threshold
+      const actualDistance = this.distance(this.filteredLat, this.filteredLng, updatedLat, updatedLng);
+      if (actualDistance < this.minDistanceThreshold && speed < 1) {
+        // Don't update if movement is too small and slow
+        return { lat: this.filteredLat, lng: this.filteredLng };
+      }
+      
+      this.filteredLat = updatedLat;
+      this.filteredLng = updatedLng;
+      
+      return { lat: updatedLat, lng: updatedLng };
+    }
+    
+    // Reset filter (when GPS restarts)
+    reset() {
+      this.filteredLat = null;
+      this.filteredLng = null;
+      this.velocityLat = 0;
+      this.velocityLng = 0;
+      this.lastTimestamp = null;
+    }
+  }
+  
+  const gpsFilter = new SmoothedGPS();
+
+  // ===== Menu Navigation =====
+  function toggleMenu() {
+    isMenuOpen = !isMenuOpen;
+    if (isMenuOpen) {
+      menuPanel.classList.add('active');
+      renderCurrentView();
+    } else {
+      menuPanel.classList.remove('active');
+    }
   }
 
-  function hideAllPanels() {
-    currentJobPanel.classList.remove('active');
-    jobHistoryPanel.classList.remove('active');
-    chatPanel.classList.remove('active');
-    settingsPanel.classList.remove('active');
-    document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
-    activePanel = null;
+  function switchView(view) {
+    currentView = view;
+    menuNavBtns.forEach(btn => {
+      if (btn.dataset.view === view) {
+        btn.classList.add('active');
+      } else {
+        btn.classList.remove('active');
+      }
+    });
+    renderCurrentView();
   }
 
-  // ===== Current Job Management =====
+  function renderCurrentView() {
+    if (!isMenuOpen) return;
+    
+    if (currentView === 'currentJob') {
+      renderCurrentJob();
+    } else if (currentView === 'jobHistory') {
+      renderJobHistory();
+    } else if (currentView === 'chat') {
+      renderChatView();
+    } else if (currentView === 'settings') {
+      renderSettingsView();
+    }
+  }
+
+  // ===== Current Job View =====
   function renderCurrentJob() {
     const allocatedJobs = driverJobs.filter(job => job.status === 'allocated');
     
     if (allocatedJobs.length === 0) {
-      currentJobContent.innerHTML = `
+      menuContent.innerHTML = `
         <div class="no-current-job">
           <div style="font-size: 48px; margin-bottom: 16px;">🚕</div>
           <div>No active jobs</div>
@@ -652,9 +701,8 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
     
-    // Show the most recent allocated job
     const current = allocatedJobs[0];
-    currentJobContent.innerHTML = `
+    menuContent.innerHTML = `
       <div class="current-job-info">
         <div class="job-detail">
           <div class="job-label">Job ID</div>
@@ -713,8 +761,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     saveJobs();
-    if (activePanel === 'jobHistory') renderJobHistory();
-    if (activePanel === 'currentJob') renderCurrentJob();
+    if (isMenuOpen && currentView === 'jobHistory') renderJobHistory();
+    if (isMenuOpen && currentView === 'currentJob') renderCurrentJob();
   }
 
   function updateJobStatus(jobId, status) {
@@ -722,18 +770,21 @@ document.addEventListener('DOMContentLoaded', () => {
     if (jobIndex >= 0) {
       driverJobs[jobIndex].status = status;
       saveJobs();
-      if (activePanel === 'jobHistory') renderJobHistory();
-      if (activePanel === 'currentJob') renderCurrentJob();
+      if (isMenuOpen && currentView === 'jobHistory') renderJobHistory();
+      if (isMenuOpen && currentView === 'currentJob') renderCurrentJob();
     }
   }
 
   function renderJobHistory() {
-    jobHistoryContent.innerHTML = '';
+    menuContent.innerHTML = '';
     
     if (driverJobs.length === 0) {
-      jobHistoryContent.innerHTML = '<div style="text-align:center; padding:40px 20px; color:#666;">No jobs in history</div>';
+      menuContent.innerHTML = '<div style="text-align:center; padding:40px 20px; color:#666;">No jobs in history</div>';
       return;
     }
+    
+    const jobsContainer = document.createElement('div');
+    jobsContainer.id = 'jobHistoryContent';
     
     driverJobs.forEach(job => {
       const jobEl = document.createElement('div');
@@ -754,51 +805,67 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>
       `;
       
-      jobHistoryContent.appendChild(jobEl);
+      jobsContainer.appendChild(jobEl);
     });
+    
+    menuContent.appendChild(jobsContainer);
   }
 
-  // ===== Mark Job Completed =====
-  window.markJobCompleted = function(jobId) {
-    // Publish completion status
-    const payload = { job: jobId, driver: DRIVER_ID, status: "completed", ts: Date.now() };
-    client.publish(`jobs/${jobId}/status`, JSON.stringify(payload));
-    
-    // Update local status
-    updateJobStatus(jobId, 'completed');
-    
-    statusEl.textContent = "✅ Job marked as completed";
-  };
-
   // ===== Chat Functions =====
-  function showChatList() {
-    chatList.style.display = 'block';
-    chatMessagesEl.style.display = 'none';
-    chatInputContainer.style.display = 'none';
-    currentChat = null;
-    chatTitle.textContent = 'Chats';
+  function renderChatView() {
+    menuContent.innerHTML = `
+      <div id="chatContent" style="height:100%; display:flex; flex-direction:column;">
+        <div id="chatList" style="flex:1; overflow-y:auto;">
+          <div class="contact-item" data-chat="group">
+            <div class="other-driver-icon" style="background:#6f42c1;">GC</div>
+            <div>
+              <div class="contact-name">Group Chat</div>
+              <div class="contact-status">All drivers</div>
+            </div>
+            ${unreadCounts.group > 0 ? `<div class="unread-badge">${unreadCounts.group}</div>` : ''}
+          </div>
+        </div>
+        <div id="chatMessages" style="display:none; flex:1; padding:12px; overflow-y:auto; display:flex; flex-direction:column; gap:8px;"></div>
+        <div id="chatInputContainer" style="display:none; padding:8px; background:white; border-top:1px solid #eee;">
+          <input type="text" id="chatInput" placeholder="Type a message..." autocomplete="off" style="flex:1; padding:12px; border:1px solid #ddd; border-radius:20px; font-size:15px;">
+          <button id="sendBtn" style="background:#000; color:#FFD700; border:none; width:44px; height:44px; border-radius:50%; margin-left:8px; cursor:pointer; display:flex; align-items:center; justify-content:center; font-weight:bold;">➤</button>
+        </div>
+      </div>
+    `;
+    
+    // Re-initialize chat functionality
+    document.getElementById('chatList').addEventListener('click', (e) => {
+      const contact = e.target.closest('.contact-item');
+      if (contact) {
+        const chatId = contact.dataset.chat;
+        openChat(chatId);
+      }
+    });
+    
+    document.getElementById('sendBtn').addEventListener('click', sendChatMessage);
+    document.getElementById('chatInput').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') sendChatMessage();
+    });
+    
     updateChatList();
   }
 
   function openChat(chatId) {
     currentChat = chatId;
-    chatList.style.display = 'none';
-    chatMessagesEl.style.display = 'flex';
-    chatInputContainer.style.display = 'flex';
+    document.getElementById('chatList').style.display = 'none';
+    document.getElementById('chatMessages').style.display = 'flex';
+    document.getElementById('chatInputContainer').style.display = 'flex';
     
-    if (chatId === 'group') {
-      chatTitle.textContent = 'Group Chat';
-    } else {
-      chatTitle.textContent = `Chat with ${chatId}`;
-    }
+    const chatTitle = chatId === 'group' ? 'Group Chat' : `Chat with ${chatId}`;
     
     unreadCounts[chatId] = 0;
     updateChatList();
     renderChatMessages();
-    chatInput.focus();
+    document.getElementById('chatInput').focus();
   }
 
   function renderChatMessages() {
+    const chatMessagesEl = document.getElementById('chatMessages');
     chatMessagesEl.innerHTML = '';
     const messages = chatMessages[currentChat] || [];
     
@@ -818,37 +885,8 @@ document.addEventListener('DOMContentLoaded', () => {
     chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
   }
 
-  function saveChatMessages() {
-    if (currentChat) {
-      localStorage.setItem(`chat_${currentChat}_${DRIVER_ID}`, JSON.stringify(chatMessages[currentChat] || []));
-    }
-    localStorage.setItem(`chat_group_${DRIVER_ID}`, JSON.stringify(chatMessages.group || []));
-  }
-
-  function addMessage(chatId, sender, text, timestamp = Date.now()) {
-    if (!chatMessages[chatId]) {
-      chatMessages[chatId] = [];
-      unreadCounts[chatId] = 0;
-    }
-    
-    chatMessages[chatId].push({ sender, text, timestamp });
-    if (chatMessages[chatId].length > 50) {
-      chatMessages[chatId] = chatMessages[chatId].slice(-50);
-    }
-    
-    if (activePanel !== 'chat' || currentChat !== chatId) {
-      unreadCounts[chatId] = (unreadCounts[chatId] || 0) + 1;
-    }
-    
-    saveChatMessages();
-    updateChatList();
-    
-    if (activePanel === 'chat' && currentChat === chatId) {
-      renderChatMessages();
-    }
-  }
-
   function updateChatList() {
+    const chatList = document.getElementById('chatList');
     chatList.innerHTML = `
       <div class="contact-item" data-chat="group">
         <div class="other-driver-icon" style="background:#6f42c1;">GC</div>
@@ -876,46 +914,115 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>
         ${unread > 0 ? `<div class="unread-badge">${unread}</div>` : ''}
       `;
-      contactEl.addEventListener('click', () => openChat(driverId));
       chatList.appendChild(contactEl);
     });
   }
 
-  // ===== Settings Functions =====
-  document.getElementById('saveDriverIdBtn').addEventListener('click', () => {
-    const newId = driverIdInput.value.trim();
-    if (!newId) {
-      alert("Please enter a driver ID");
-      return;
-    }
-    if (!validateDriverId(newId)) {
-      alert("Invalid driver ID. Use only letters, numbers, hyphens, and underscores.");
-      return;
-    }
+  function sendChatMessage() {
+    const chatInput = document.getElementById('chatInput');
+    const text = chatInput.value.trim();
+    if (!text || !currentChat) return;
     
-    // Update localStorage and variables
-    localStorage.setItem('driver_id', newId);
-    DRIVER_ID = newId;
-    currentDriverId.textContent = newId;
-    
-    // Reconnect MQTT with new ID
-    if (client) {
-      client.end();
-      setTimeout(() => connectMQTT(), 1000);
+    if (currentChat === 'group') {
+      const payload = { sender: DRIVER_ID, text, timestamp: Date.now() };
+      client.publish(CHAT_GROUP_TOPIC, JSON.stringify(payload));
+    } else {
+      const payload = { sender: DRIVER_ID, text, timestamp: Date.now() };
+      client.publish(`chat/private/${currentChat}/${DRIVER_ID}`, JSON.stringify(payload));
     }
     
-    statusEl.textContent = `✅ Driver ID updated to: ${newId}`;
-  });
+    addMessage(currentChat, DRIVER_ID, text);
+    chatInput.value = '';
+  }
 
-  document.getElementById('clearJobsBtn').addEventListener('click', () => {
-    if (confirm("Are you sure you want to clear all job history?")) {
-      driverJobs = [];
-      saveJobs();
-      if (activePanel === 'jobHistory') renderJobHistory();
-      if (activePanel === 'currentJob') renderCurrentJob();
-      statusEl.textContent = "✅ Job history cleared";
+  function addMessage(chatId, sender, text, timestamp = Date.now()) {
+    if (!chatMessages[chatId]) {
+      chatMessages[chatId] = [];
+      unreadCounts[chatId] = 0;
     }
-  });
+    
+    chatMessages[chatId].push({ sender, text, timestamp });
+    if (chatMessages[chatId].length > 50) {
+      chatMessages[chatId] = chatMessages[chatId].slice(-50);
+    }
+    
+    if (!isMenuOpen || currentView !== 'chat' || currentChat !== chatId) {
+      unreadCounts[chatId] = (unreadCounts[chatId] || 0) + 1;
+    }
+    
+    saveChatMessages();
+    updateChatList();
+    
+    if (isMenuOpen && currentView === 'chat' && currentChat === chatId) {
+      renderChatMessages();
+    }
+  }
+
+  function saveChatMessages() {
+    if (currentChat) {
+      localStorage.setItem(`chat_${currentChat}_${DRIVER_ID}`, JSON.stringify(chatMessages[currentChat] || []));
+    }
+    localStorage.setItem(`chat_group_${DRIVER_ID}`, JSON.stringify(chatMessages.group || []));
+  }
+
+  // ===== Settings View =====
+  function renderSettingsView() {
+    menuContent.innerHTML = `
+      <div class="settings-group">
+        <div class="settings-label">Driver ID</div>
+        <input type="text" id="driverIdInput" class="settings-input" placeholder="Enter your driver ID" value="${DRIVER_ID}">
+        <button class="settings-btn" id="saveDriverIdBtn">Save Driver ID</button>
+        <div class="settings-info">
+          Your current ID: <span id="currentDriverId">${DRIVER_ID}</span>
+        </div>
+      </div>
+      <div class="settings-group">
+        <div class="settings-label">Clear Job History</div>
+        <button class="settings-btn" id="clearJobsBtn" style="background:#dc3545;">Clear All Jobs</button>
+      </div>
+    `;
+    
+    document.getElementById('saveDriverIdBtn').addEventListener('click', () => {
+      const newId = document.getElementById('driverIdInput').value.trim();
+      if (!newId) {
+        alert("Please enter a driver ID");
+        return;
+      }
+      if (!validateDriverId(newId)) {
+        alert("Invalid driver ID. Use only letters, numbers, hyphens, and underscores.");
+        return;
+      }
+      
+      localStorage.setItem('driver_id', newId);
+      DRIVER_ID = newId;
+      document.getElementById('currentDriverId').textContent = newId;
+      
+      if (client) {
+        client.end();
+        setTimeout(() => connectMQTT(), 1000);
+      }
+      
+      statusEl.textContent = `✅ Driver ID updated to: ${newId}`;
+    });
+    
+    document.getElementById('clearJobsBtn').addEventListener('click', () => {
+      if (confirm("Are you sure you want to clear all job history?")) {
+        driverJobs = [];
+        saveJobs();
+        if (isMenuOpen && currentView === 'jobHistory') renderJobHistory();
+        if (isMenuOpen && currentView === 'currentJob') renderCurrentJob();
+        statusEl.textContent = "✅ Job history cleared";
+      }
+    });
+  }
+
+  // ===== Mark Job Completed =====
+  window.markJobCompleted = function(jobId) {
+    const payload = { job: jobId, driver: DRIVER_ID, status: "completed", ts: Date.now() };
+    client.publish(`jobs/${jobId}/status`, JSON.stringify(payload));
+    updateJobStatus(jobId, 'completed');
+    statusEl.textContent = "✅ Job marked as completed";
+  };
 
   // ===== Compass Handling =====
   function initCompass() {
@@ -949,7 +1056,9 @@ document.addEventListener('DOMContentLoaded', () => {
       alpha = event.alpha;
     }
     if (alpha !== null && !isNaN(alpha)) {
-      heading = (360 - alpha) % 360;
+      // Smooth compass heading to prevent jitter
+      const newHeading = (360 - alpha) % 360;
+      heading = heading * 0.7 + newHeading * 0.3; // Exponential smoothing
       updateDriverRotation();
     }
   }
@@ -979,7 +1088,6 @@ document.addEventListener('DOMContentLoaded', () => {
       client.subscribe(CHAT_PRIVATE_TOPIC);
       client.subscribe(JOB_RESULT_TOPIC);
       publishLocation();
-      
       setInterval(cleanupOldDrivers, 30000);
     });
 
@@ -1036,7 +1144,7 @@ document.addEventListener('DOMContentLoaded', () => {
           if(data.lat !== undefined && data.lng !== undefined) {
             updateOtherDriverMarker(otherDriverId, data.lat, data.lng, data);
             driverStatus[otherDriverId] = Date.now();
-            updateChatList();
+            if (isMenuOpen && currentView === 'chat') updateChatList();
           }
         }
         
@@ -1107,7 +1215,7 @@ document.addEventListener('DOMContentLoaded', () => {
       delete unreadCounts[driverId];
     });
     
-    updateChatList();
+    if (isMenuOpen && currentView === 'chat') updateChatList();
   }
 
   function publishLocation(){
@@ -1121,22 +1229,6 @@ document.addEventListener('DOMContentLoaded', () => {
       heading: Math.round(heading)
     };
     client.publish(LOCATION_TOPIC, JSON.stringify(payload));
-  }
-
-  function sendChatMessage() {
-    const text = chatInput.value.trim();
-    if (!text || !currentChat) return;
-    
-    if (currentChat === 'group') {
-      const payload = { sender: DRIVER_ID, text, timestamp: Date.now() };
-      client.publish(CHAT_GROUP_TOPIC, JSON.stringify(payload));
-    } else {
-      const payload = { sender: DRIVER_ID, text, timestamp: Date.now() };
-      client.publish(`chat/private/${currentChat}/${DRIVER_ID}`, JSON.stringify(payload));
-    }
-    
-    addMessage(currentChat, DRIVER_ID, text);
-    chatInput.value = '';
   }
 
   // ===== Job Response =====
@@ -1173,39 +1265,24 @@ document.addEventListener('DOMContentLoaded', () => {
   // ===== Event Listeners =====
   document.getElementById('acceptBtn').addEventListener('click', () => respondToJob(true));
   document.getElementById('rejectBtn').addEventListener('click', () => respondToJob(false));
+  document.getElementById('menuBtn').addEventListener('click', toggleMenu);
   
-  // Navigation buttons
-  document.getElementById('currentJobBtn').addEventListener('click', () => showPanel('currentJob'));
-  document.getElementById('jobHistoryBtn').addEventListener('click', () => showPanel('jobHistory'));
-  document.getElementById('chatBtn').addEventListener('click', () => showPanel('chat'));
-  document.getElementById('settingsBtn').addEventListener('click', () => showPanel('settings'));
-  
-  // Close buttons
-  document.getElementById('currentJobCloseBtn').addEventListener('click', hideAllPanels);
-  document.getElementById('jobHistoryCloseBtn').addEventListener('click', hideAllPanels);
-  document.getElementById('chatCloseBtn').addEventListener('click', hideAllPanels);
-  document.getElementById('settingsCloseBtn').addEventListener('click', hideAllPanels);
-  
-  document.getElementById('sendBtn').addEventListener('click', sendChatMessage);
-  chatInput.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') sendChatMessage();
+  document.querySelectorAll('.menu-nav-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      switchView(btn.dataset.view);
+    });
   });
 
-  // Close panels when clicking outside
   document.addEventListener('click', (e) => {
-    const panels = [currentJobPanel, jobHistoryPanel, chatPanel, settingsPanel];
-    const buttons = [document.getElementById('currentJobBtn'), document.getElementById('jobHistoryBtn'), 
-                     document.getElementById('chatBtn'), document.getElementById('settingsBtn')];
-    
-    const clickedOnPanel = panels.some(panel => panel.contains(e.target));
-    const clickedOnButton = buttons.some(btn => btn === e.target);
-    
-    if (activePanel && !clickedOnPanel && !clickedOnButton) {
-      hideAllPanels();
+    if (isMenuOpen && 
+        !menuPanel.contains(e.target) && 
+        e.target !== document.getElementById('menuBtn')) {
+      isMenuOpen = false;
+      menuPanel.classList.remove('active');
     }
   });
 
-  // ===== GPS & HEADING =====
+  // ===== SMOOTHED GPS & HEADING =====
   if(!('geolocation' in navigator)){
     alert("Geolocation not supported.");
     statusEl.textContent = "Geolocation not supported.";
@@ -1241,36 +1318,49 @@ document.addEventListener('DOMContentLoaded', () => {
 
       gpsWatchId = navigator.geolocation.watchPosition(
         pos => {
-          const lat = pos.coords.latitude;
-          const lng = pos.coords.longitude;
+          const rawLat = pos.coords.latitude;
+          const rawLng = pos.coords.longitude;
           const speed = pos.coords.speed || 0;
+          const timestamp = pos.timestamp || Date.now();
           
+          // Apply Kalman filter for smooth positioning
+          const smoothed = gpsFilter.kalmanFilter(rawLat, rawLng, timestamp);
+          driverCoords = {lat: smoothed.lat, lng: smoothed.lng};
+          
+          // Update heading with movement-based calculation (if no compass)
           if (!useCompass || speed < 0.3) {
             if (prevCoords && speed > 0.1) {
-              const dy = lat - prevCoords.lat;
-              const dx = lng - prevCoords.lng;
+              const dy = smoothed.lat - prevCoords.lat;
+              const dx = smoothed.lng - prevCoords.lng;
               const newHeading = (Math.atan2(dx, dy) * 180 / Math.PI + 360) % 360;
+              // Smooth the heading change
               heading = heading * 0.8 + newHeading * 0.2;
             }
-            prevCoords = {lat, lng};
+            prevCoords = {lat: smoothed.lat, lng: smoothed.lng};
           }
 
-          driverCoords = {lat, lng};
-          driverMarker.setLatLng([lat, lng]);
+          // Update marker and map
+          driverMarker.setLatLng([smoothed.lat, smoothed.lng]);
           updateDriverRotation();
-          map.setView([lat, lng], 15);
+          map.setView([smoothed.lat, smoothed.lng], 15);
           publishLocation();
           
           if(currentJob && routeLine){
-            routeLine.setLatLngs([[lat, lng], [currentJob.lat, currentJob.lng]]);
+            routeLine.setLatLngs([[smoothed.lat, smoothed.lng], [currentJob.lat, currentJob.lng]]);
           }
           
-          statusEl.textContent = `GPS: ${lat.toFixed(5)}, ${lng.toFixed(5)} | Heading: ${Math.round(heading)}° | Drivers: ${Object.keys(otherDrivers).length}`;
+          statusEl.textContent = `GPS: ${smoothed.lat.toFixed(5)}, ${smoothed.lng.toFixed(5)} | Heading: ${Math.round(heading)}° | Speed: ${speed.toFixed(1)} m/s`;
         },
         err => {
           statusEl.textContent = "GPS error: " + err.message;
+          // Reset filter on error to prevent stale data
+          gpsFilter.reset();
         },
-        { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
+        { 
+          enableHighAccuracy: true, 
+          maximumAge: 5000, 
+          timeout: 10000 
+        }
       );
     },
     err => {
