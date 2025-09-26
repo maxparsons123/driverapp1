@@ -554,8 +554,12 @@
     </div>
     <div id="menuContent"></div>
   </div>
+
+  <!-- Leaflet + RotatedMarker -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet-rotatedmarker/0.2.0/leaflet.rotatedMarker.min.js"></script>
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+
   <script>
 document.addEventListener('DOMContentLoaded', () => {
   // ===== Driver Registration =====
@@ -583,6 +587,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const CHAT_PRIVATE_TOPIC = `chat/private/${DRIVER_ID}/+`;
   const JOB_RESULT_TOPIC = `jobs/+/result/${DRIVER_ID}`;
 
+  // GPS & Map State
   let driverCoords = null;
   let map = null;
   let driverMarker = null;
@@ -593,22 +598,29 @@ document.addEventListener('DOMContentLoaded', () => {
   let currentChat = null;
   let isMenuOpen = false;
   let currentView = 'currentJob';
-  let gpsWatchId = null;
 
-  // Other drivers tracking
+  // GPS Tracking State
+  const REQUIRED_FIXES = 3;
+  const MAX_ACCEPTABLE_ACCURACY = 50;
+  const MIN_MOVEMENT = 3;
+  let firstFixes = [];
+  let lastCoords = null;
+  let lastTimestamp = null;
+  let lastSpeed = 0;
+  let lastHeading = null;
+  let mapInitialized = false;
+  let gpsWatchId = null;
+  let predictionInterval = null;
+  let accuracyCircle = null;
+
+  // Other systems
   const otherDrivers = {};
   const driverStatus = {};
-  const chatMessages = {
-    group: JSON.parse(localStorage.getItem(`chat_group_${DRIVER_ID}`)) || []
-  };
-  const unreadCounts = {
-    group: 0
-  };
-
-  // Job history storage
+  const chatMessages = { group: JSON.parse(localStorage.getItem(`chat_group_${DRIVER_ID}`)) || [] };
+  const unreadCounts = { group: 0 };
   let driverJobs = JSON.parse(localStorage.getItem(`driver_jobs_${DRIVER_ID}`)) || [];
 
-  // DOM Elements
+  // DOM
   const statusEl = document.getElementById('status');
   const jobPanel = document.getElementById('jobPanel');
   const pickupLocation = document.getElementById('pickupLocation');
@@ -618,166 +630,194 @@ document.addEventListener('DOMContentLoaded', () => {
   const menuNavBtns = document.querySelectorAll('.menu-nav-btn');
   const loadingOverlay = document.getElementById('loadingOverlay');
 
-  // ===== SIMPLE GPS HELPER =====
-  function calculateDistance(lat1, lon1, lat2, lon2) {
+  // ===== HELPER FUNCTIONS =====
+  function logStatus(msg) {
+    statusEl.innerHTML = msg;
+  }
+
+  function haversineDistance(c1, c2) {
     const R = 6371000;
-    const φ1 = (lat1 * Math.PI) / 180;
-    const φ2 = (lat2 * Math.PI) / 180;
-    const Δφ = ((lat2 - lat1) * Math.PI) / 180;
-    const Δλ = ((lon2 - lon1) * Math.PI) / 180;
-    const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-      Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c;
+    const dLat = (c2.lat - c1.lat) * Math.PI / 180;
+    const dLng = (c2.lng - c1.lng) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) ** 2 +
+      Math.cos(c1.lat * Math.PI / 180) *
+      Math.cos(c2.lat * Math.PI / 180) *
+      Math.sin(dLng / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   }
 
-  // Update driver marker with heading-based rotation
-  function updateDriverMarker(lat, lng, headingValue) {
-    if (!driverMarker) return;
-    driverMarker.setLatLng([lat, lng]);
-    const iconDiv = driverMarker.getElement();
-    if (iconDiv) {
-      iconDiv.style.transform = `rotate(${headingValue || 0}deg)`;
+  function averageFixes(fixes) {
+    const avgLat = fixes.reduce((sum, p) => sum + p.lat, 0) / fixes.length;
+    const avgLng = fixes.reduce((sum, p) => sum + p.lng, 0) / fixes.length;
+    return { lat: avgLat, lng: avgLng };
+  }
+
+  function getAccuracyColor(accuracy) {
+    if (accuracy <= 10) return "#00c853";
+    if (accuracy <= 25) return "#ffd600";
+    if (accuracy <= 50) return "#ff6d00";
+    return "#d50000";
+  }
+
+  function updateAccuracyCircle(lat, lng, accuracy) {
+    const color = getAccuracyColor(accuracy);
+    if (!accuracyCircle) {
+      accuracyCircle = L.circle([lat, lng], {
+        radius: accuracy,
+        color,
+        fillColor: color,
+        fillOpacity: 0.2,
+      }).addTo(map);
+    } else {
+      accuracyCircle.setLatLng([lat, lng]);
+      accuracyCircle.setRadius(accuracy);
+      accuracyCircle.setStyle({ color, fillColor: color });
     }
   }
 
-  // Throttled location publishing
-  let lastPublish = 0;
-  let lastPublishCoords = null;
-  function publishLocationThrottled(headingValue) {
-    const now = Date.now();
-    if (!lastPublishCoords ||
-        calculateDistance(lastPublishCoords.lat, lastPublishCoords.lng, driverCoords.lat, driverCoords.lng) > 5 ||
-        now - lastPublish > 3000) {
-      client.publish(LOCATION_TOPIC, JSON.stringify({
-        driver: DRIVER_ID,
-        lat: driverCoords.lat,
-        lng: driverCoords.lng,
-        status: 'idle',
-        ts: now,
-        heading: Math.round(headingValue)
-      }));
-      lastPublish = now;
-      lastPublishCoords = { ...driverCoords };
-    }
-  }
-
-  // Smooth map panning
-  function updateMapSmoothly(lat, lng) {
+  function smoothPan(targetLatLng) {
     if (!map) return;
-    const mapCenter = map.getCenter();
-    const dist = calculateDistance(mapCenter.lat, mapCenter.lng, lat, lng);
-    if (dist > 50) map.panTo([lat, lng]);
+    map.flyTo(targetLatLng, map.getZoom(), { animate: true, duration: 0.8 });
   }
 
-  // ===== IMMEDIATE MAP INITIALIZATION =====
-  function initMapImmediately() {
-    loadingOverlay.style.display = 'none';
-    const defaultCenter = [52.4068, -1.5197];
-    map = L.map('map').setView(defaultCenter, 13);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19,
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-    }).addTo(map);
-
-    driverMarker = L.marker(defaultCenter, {
-      title: "Location Initializing...",
-      icon: L.divIcon({
-        className: 'driver-icon',
-        html: `<div class="driver-icon" style="background:#6c757d;">?</div>`,
-        iconSize: [36, 36],
-        iconAnchor: [18, 18]
-      })
-    }).addTo(map);
-
-    statusEl.innerHTML = '<span class="gps-source gps-poor"></span>Map loaded. Getting location...';
-    initGPS();
+  function publishLocation() {
+    if (!client || !driverCoords) return;
+    client.publish(LOCATION_TOPIC, JSON.stringify({
+      driver: DRIVER_ID,
+      lat: driverCoords.lat,
+      lng: driverCoords.lng,
+      status: 'idle',
+      ts: Date.now(),
+      heading: lastHeading ? Math.round(lastHeading) : 0
+    }));
   }
 
-  // ===== GPS INITIALIZATION (SIMPLIFIED) =====
-  function initGPS() {
-    if (!('geolocation' in navigator)) {
-      alert("Geolocation not supported.");
-      statusEl.innerHTML = '<span class="gps-source gps-poor"></span>Geolocation not supported.';
-      connectMQTT();
+  function predictPosition() {
+    if (!lastCoords || !lastSpeed || lastSpeed < 0.5 || lastHeading === null) return;
+    const now = Date.now();
+    const deltaTime = (now - lastTimestamp) / 1000;
+    const distance = lastSpeed * deltaTime;
+    const R = 6371000;
+    const d = distance / R;
+    const lat1 = lastCoords.lat * Math.PI / 180;
+    const lng1 = lastCoords.lng * Math.PI / 180;
+    const bearing = lastHeading * Math.PI / 180;
+    const predLat = Math.asin(
+      Math.sin(lat1) * Math.cos(d) + Math.cos(lat1) * Math.sin(d) * Math.cos(bearing)
+    );
+    const predLng = lng1 + Math.atan2(
+      Math.sin(bearing) * Math.sin(d) * Math.cos(lat1),
+      Math.cos(d) - Math.sin(lat1) * Math.sin(predLat)
+    );
+    const predictedCoords = {
+      lat: predLat * 180 / Math.PI,
+      lng: predLng * 180 / Math.PI,
+    };
+    driverMarker.setLatLng(predictedCoords);
+    smoothPan(predictedCoords);
+    if (accuracyCircle) accuracyCircle.setLatLng(predictedCoords);
+    if (driverMarker.setRotationAngle) {
+      driverMarker.setRotationAngle(lastHeading);
+    }
+  }
+
+  // ===== GPS HANDLERS =====
+  function handlePositionUpdate(pos) {
+    const { latitude: lat, longitude: lng, accuracy, speed, heading } = pos.coords;
+
+    if (accuracy > MAX_ACCEPTABLE_ACCURACY) {
+      logStatus(`Ignoring low-accuracy fix (${accuracy.toFixed(0)}m)`);
       return;
     }
 
-    navigator.geolocation.getCurrentPosition(
-      pos => {
-        const lat = pos.coords.latitude;
-        const lng = pos.coords.longitude;
-        map.setView([lat, lng], 15);
-        driverCoords = { lat, lng };
-        const heading = pos.coords.heading || 0;
+    const newCoords = { lat, lng };
+    if (lastCoords) {
+      const distance = haversineDistance(lastCoords, newCoords);
+      if (distance < MIN_MOVEMENT) {
+        logStatus(`Ignored tiny movement (${distance.toFixed(1)}m)`);
+        return;
+      }
+    }
 
-        driverMarker.setLatLng([lat, lng]);
-        driverMarker.options.title = `Driver: ${DRIVER_ID}`;
-        driverMarker.setIcon(L.divIcon({
-          className: 'driver-icon',
-          html: `<div class="driver-icon" style="background:#1f6feb;">${DRIVER_ID.substring(0,2).toUpperCase()}</div>`,
-          iconSize: [36, 36],
-          iconAnchor: [18, 18]
-        }));
+    lastCoords = newCoords;
+    lastTimestamp = Date.now();
+    lastSpeed = speed ?? 0;
+    lastHeading = heading ?? lastHeading;
+    driverCoords = newCoords;
 
-        connectMQTT();
+    if (!mapInitialized) {
+      firstFixes.push(driverCoords);
+      if (firstFixes.length < REQUIRED_FIXES) {
+        logStatus(`Waiting for GPS lock... (${firstFixes.length}/${REQUIRED_FIXES})`);
+        return;
+      }
 
-        gpsWatchId = navigator.geolocation.watchPosition(
-          pos => {
-            const rawLat = pos.coords.latitude;
-            const rawLng = pos.coords.longitude;
-            const accuracy = pos.coords.accuracy || 50;
-            const speed = pos.coords.speed || 0;
-            const heading = pos.coords.heading || 0;
-            const timestamp = pos.timestamp || Date.now();
+      const avg = averageFixes(firstFixes);
+      map = L.map("map").setView([avg.lat, avg.lng], 15);
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        maxZoom: 19,
+        attribution: '&copy; OpenStreetMap contributors'
+      }).addTo(map);
 
-            // Skip very poor accuracy
-            if (accuracy > 100) return;
+      driverMarker = L.marker([avg.lat, avg.lng], {
+        title: DRIVER_ID,
+        rotationAngle: 0,
+        rotationOrigin: "center center"
+      }).addTo(map);
 
-            driverCoords = { lat: rawLat, lng: rawLng };
-            updateMapSmoothly(rawLat, rawLng);
-            updateDriverMarker(rawLat, rawLng, heading);
+      updateAccuracyCircle(avg.lat, avg.lng, accuracy);
+      connectMQTT();
+      mapInitialized = true;
+      predictionInterval = setInterval(predictPosition, 500);
+      loadingOverlay.style.display = 'none';
+    } else {
+      driverMarker.setLatLng([lat, lng]);
+      smoothPan([lat, lng]);
+      updateAccuracyCircle(lat, lng, accuracy);
+      if (driverMarker.setRotationAngle) {
+        driverMarker.setRotationAngle(lastHeading);
+      }
+    }
 
-            if (currentJob && routeLine) {
-              routeLine.setLatLngs([[rawLat, rawLng], [currentJob.lat, currentJob.lng]]);
-            }
+    publishLocation();
 
-            publishLocationThrottled(heading);
+    if (currentJob && routeLine) {
+      routeLine.setLatLngs([[lat, lng], [currentJob.lat, currentJob.lng]]);
+    }
 
-            let statusClass = 'gps-gps';
-            if (accuracy > 50) statusClass = 'gps-poor';
-            else if (accuracy > 20) statusClass = 'gps-network';
-
-            statusEl.innerHTML = `
-              <span class="gps-source ${statusClass}"></span>
-              GPS: ${rawLat.toFixed(5)}, ${rawLng.toFixed(5)} | 
-              Acc: ${Math.round(accuracy)}m | 
-              Speed: ${speed ? Math.round(speed * 3.6) : '--'} km/h
-            `;
-          },
-          err => {
-            console.error("GPS Error:", err);
-            statusEl.innerHTML = `<span class="gps-source gps-poor"></span>GPS Error: ${err.message}`;
-          },
-          {
-            enableHighAccuracy: true,
-            maximumAge: 0,
-            timeout: 8000
-          }
-        );
-      },
-      err => {
-        console.error("Initial GPS Error:", err);
-        if (err.code === 1) {
-          statusEl.innerHTML = '<span class="gps-source gps-poor"></span>📍 Location access denied';
-          alert("Please allow location access to use this app.");
-        } else {
-          statusEl.innerHTML = '<span class="gps-source gps-poor"></span>📍 GPS unavailable';
-        }
-        connectMQTT();
-      },
-      { enableHighAccuracy: true, timeout: 6000 }
+    logStatus(
+      `GPS: ${lat.toFixed(5)}, ${lng.toFixed(5)} (±${accuracy.toFixed(0)}m) | ` +
+      `Speed: ${(lastSpeed * 3.6).toFixed(1)} km/h | ` +
+      `Heading: ${lastHeading !== null ? lastHeading.toFixed(0) + "°" : "N/A"}`
     );
+  }
+
+  function handlePositionError(err) {
+    const messages = {
+      1: "GPS permission denied. Please enable location access.",
+      2: "GPS position unavailable. Check your device settings.",
+      3: "GPS request timed out. Trying again...",
+    };
+    alert(messages[err.code] || `GPS error: ${err.message}`);
+    logStatus(`<span class="gps-source gps-poor"></span>GPS error: ${err.message}`);
+  }
+
+  // ===== START GPS =====
+  function initLocationTracking() {
+    if (!navigator.geolocation) {
+      alert("Geolocation not supported.");
+      logStatus('<span class="gps-source gps-poor"></span>Geolocation not supported.');
+      return;
+    }
+
+    const geoOptions = {
+      enableHighAccuracy: true,
+      maximumAge: 5000,
+      timeout: 10000,
+    };
+
+    navigator.geolocation.getCurrentPosition(handlePositionUpdate, handlePositionError, geoOptions);
+    gpsWatchId = navigator.geolocation.watchPosition(handlePositionUpdate, handlePositionError, geoOptions);
   }
 
   // ===== REST OF LOGIC (UNCHANGED) =====
@@ -1139,9 +1179,7 @@ document.addEventListener('DOMContentLoaded', () => {
       client.subscribe(CHAT_GROUP_TOPIC);
       client.subscribe(CHAT_PRIVATE_TOPIC);
       client.subscribe(JOB_RESULT_TOPIC);
-      if (driverCoords) {
-        publishLocationThrottled(0);
-      }
+      if (mapInitialized) publishLocation();
       setInterval(cleanupOldDrivers, 30000);
     });
     client.on('message', (topic, message)=>{ 
@@ -1286,6 +1324,7 @@ document.addEventListener('DOMContentLoaded', () => {
     currentJob = null;
   }
 
+  // ===== EVENT LISTENERS =====
   document.getElementById('acceptBtn').addEventListener('click', () => respondToJob(true));
   document.getElementById('rejectBtn').addEventListener('click', () => respondToJob(false));
   document.getElementById('menuBtn').addEventListener('click', toggleMenu);
@@ -1303,11 +1342,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  // ===== CLEANUP =====
   window.addEventListener('beforeunload', () => {
     if (gpsWatchId) navigator.geolocation.clearWatch(gpsWatchId);
+    if (predictionInterval) clearInterval(predictionInterval);
   });
 
-  initMapImmediately();
+  // ===== START APP =====
+  initLocationTracking();
   renderCurrentJob();
 });
   </script>
