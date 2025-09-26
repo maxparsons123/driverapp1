@@ -6,7 +6,6 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
   <style>
-    /* ===== SAME CSS AS BEFORE — NO CHANGES ===== */
     body { 
       margin:0; 
       font-family:system-ui, -apple-system, "Segoe UI", sans-serif; 
@@ -72,7 +71,7 @@
       bottom: 80px;
       left: 50%;
       transform: translateX(-50%);
-      background: rgba(255, 255, 255, 0.9);
+      background: rgba(255, 255, 255, 0.95);
       padding: 8px 16px;
       border-radius: 24px;
       font-size: 14px;
@@ -82,6 +81,7 @@
       max-width: 90%;
       box-shadow: 0 4px 12px rgba(0,0,0,0.15);
       font-weight: 600;
+      backdrop-filter: blur(4px);
     }
     .gps-source {
       display: inline-block;
@@ -515,7 +515,7 @@
     <div id="appTitle">Black Cab Unite</div>
     <button id="menuBtn">☰</button>
   </div>
-  <div id="status">Initializing...</div>
+  <div id="status">Map loading...</div>
   <div id="jobPanel">
     <h2>🚕 New Job Request</h2>
     <div id="jobInfo">
@@ -554,22 +554,17 @@
     </div>
     <div id="menuContent"></div>
   </div>
-
-  <!-- Leaflet + RotatedMarker -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet-rotatedmarker/0.2.0/leaflet.rotatedMarker.min.js"></script>
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
-
   <script>
 document.addEventListener('DOMContentLoaded', () => {
-  // ===== Driver Registration =====
+  // ===== Driver Setup =====
   let DRIVER_ID = localStorage.getItem('driver_id');
   function validateDriverId(id) {
-    if (!id) return false;
-    return /^[a-zA-Z0-9_-]+$/.test(id);
+    return id && /^[a-zA-Z0-9_-]+$/.test(id);
   }
-  if(!DRIVER_ID || !validateDriverId(DRIVER_ID)) {
-    while (!DRIVER_ID || !validateDriverId(DRIVER_ID)) {
+  if (!validateDriverId(DRIVER_ID)) {
+    while (!validateDriverId(DRIVER_ID)) {
       DRIVER_ID = prompt("Enter your driver name or ID (letters, numbers, hyphens only):");
       if (DRIVER_ID === null) {
         DRIVER_ID = 'driver-' + Math.random().toString(36).substr(2, 8);
@@ -579,7 +574,7 @@ document.addEventListener('DOMContentLoaded', () => {
     localStorage.setItem('driver_id', DRIVER_ID);
   }
 
-  const MQTT_BROKER = "wss://broker.hivemq.com:8884/mqtt"; 
+  const MQTT_BROKER = "wss://broker.hivemq.com:8884/mqtt";
   const REQUEST_TOPIC = "pubs/requests/+";
   const LOCATION_TOPIC = `drivers/${DRIVER_ID}/location`;
   const DRIVERS_LOCATION_TOPIC = "drivers/+/location";
@@ -587,7 +582,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const CHAT_PRIVATE_TOPIC = `chat/private/${DRIVER_ID}/+`;
   const JOB_RESULT_TOPIC = `jobs/+/result/${DRIVER_ID}`;
 
-  // GPS & Map State
+  // State
   let driverCoords = null;
   let map = null;
   let driverMarker = null;
@@ -598,22 +593,9 @@ document.addEventListener('DOMContentLoaded', () => {
   let currentChat = null;
   let isMenuOpen = false;
   let currentView = 'currentJob';
-
-  // GPS Tracking State
-  const REQUIRED_FIXES = 3;
-  const MAX_ACCEPTABLE_ACCURACY = 50;
-  const MIN_MOVEMENT = 3;
-  let firstFixes = [];
-  let lastCoords = null;
-  let lastTimestamp = null;
-  let lastSpeed = 0;
-  let lastHeading = null;
-  let mapInitialized = false;
   let gpsWatchId = null;
-  let predictionInterval = null;
-  let accuracyCircle = null;
 
-  // Other systems
+  // Other data
   const otherDrivers = {};
   const driverStatus = {};
   const chatMessages = { group: JSON.parse(localStorage.getItem(`chat_group_${DRIVER_ID}`)) || [] };
@@ -630,230 +612,276 @@ document.addEventListener('DOMContentLoaded', () => {
   const menuNavBtns = document.querySelectorAll('.menu-nav-btn');
   const loadingOverlay = document.getElementById('loadingOverlay');
 
-  // ===== HELPER FUNCTIONS =====
-  function logStatus(msg) {
-    statusEl.innerHTML = msg;
-  }
-
-  function haversineDistance(c1, c2) {
+  // ===== HELPER: Distance Calculation =====
+  function calculateDistance(lat1, lon1, lat2, lon2) {
     const R = 6371000;
-    const dLat = (c2.lat - c1.lat) * Math.PI / 180;
-    const dLng = (c2.lng - c1.lng) * Math.PI / 180;
-    const a = Math.sin(dLat / 2) ** 2 +
-      Math.cos(c1.lat * Math.PI / 180) *
-      Math.cos(c2.lat * Math.PI / 180) *
-      Math.sin(dLng / 2) ** 2;
-    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    const φ1 = (lat1 * Math.PI) / 180;
+    const φ2 = (lat2 * Math.PI) / 180;
+    const Δφ = ((lat2 - lat1) * Math.PI) / 180;
+    const Δλ = ((lon2 - lon1) * Math.PI) / 180;
+    const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+      Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
   }
 
-  function averageFixes(fixes) {
-    const avgLat = fixes.reduce((sum, p) => sum + p.lat, 0) / fixes.length;
-    const avgLng = fixes.reduce((sum, p) => sum + p.lng, 0) / fixes.length;
-    return { lat: avgLat, lng: avgLng };
+  // ===== CREATE DRIVER ICON WITH HEADING =====
+  function createDriverIcon(heading) {
+    return L.divIcon({
+      html: `
+        <div class="driver-icon" style="
+          width: 36px;
+          height: 36px;
+          background: #1f6feb;
+          border: 3px solid white;
+          border-radius: 6px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: white;
+          font-weight: bold;
+          font-size: 12px;
+          box-shadow: 0 2px 6px rgba(31,111,235,0.4);
+          transform: rotate(${heading || 0}deg);
+          position: relative;
+        ">
+          <div style="
+            position: absolute;
+            top: -4px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            border-left: 5px solid transparent;
+            border-right: 5px solid transparent;
+            border-bottom: 10px solid #1f6feb;
+          "></div>
+          ${DRIVER_ID.substring(0,2).toUpperCase()}
+        </div>
+      `,
+      iconSize: [36, 36],
+      iconAnchor: [18, 18]
+    });
   }
 
-  function getAccuracyColor(accuracy) {
-    if (accuracy <= 10) return "#00c853";
-    if (accuracy <= 25) return "#ffd600";
-    if (accuracy <= 50) return "#ff6d00";
-    return "#d50000";
+  // ===== 1. INIT MAP INSTANTLY (NO GPS WAIT) =====
+  function initMapImmediately() {
+    loadingOverlay.style.display = 'none';
+
+    const defaultCenter = [52.4068, -1.5197];
+    map = L.map('map').setView(defaultCenter, 13);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    }).addTo(map);
+
+    driverMarker = L.marker(defaultCenter, {
+      icon: createDriverIcon(0),
+      title: "Map ready. Starting GPS..."
+    }).addTo(map);
+
+    statusEl.innerHTML = '<span class="gps-source gps-poor"></span>Map ready. Starting GPS...';
+
+    // Start GPS after map is visible
+    setTimeout(initGPS, 300);
   }
 
-  function updateAccuracyCircle(lat, lng, accuracy) {
-    const color = getAccuracyColor(accuracy);
-    if (!accuracyCircle) {
-      accuracyCircle = L.circle([lat, lng], {
-        radius: accuracy,
-        color,
-        fillColor: color,
-        fillOpacity: 0.2,
-      }).addTo(map);
-    } else {
-      accuracyCircle.setLatLng([lat, lng]);
-      accuracyCircle.setRadius(accuracy);
-      accuracyCircle.setStyle({ color, fillColor: color });
-    }
-  }
-
-  function smoothPan(targetLatLng) {
-    if (!map) return;
-    map.flyTo(targetLatLng, map.getZoom(), { animate: true, duration: 0.8 });
-  }
-
-  function publishLocation() {
-    if (!client || !driverCoords) return;
-    client.publish(LOCATION_TOPIC, JSON.stringify({
-      driver: DRIVER_ID,
-      lat: driverCoords.lat,
-      lng: driverCoords.lng,
-      status: 'idle',
-      ts: Date.now(),
-      heading: lastHeading ? Math.round(lastHeading) : 0
-    }));
-  }
-
-  function predictPosition() {
-    if (!lastCoords || !lastSpeed || lastSpeed < 0.5 || lastHeading === null) return;
-    const now = Date.now();
-    const deltaTime = (now - lastTimestamp) / 1000;
-    const distance = lastSpeed * deltaTime;
-    const R = 6371000;
-    const d = distance / R;
-    const lat1 = lastCoords.lat * Math.PI / 180;
-    const lng1 = lastCoords.lng * Math.PI / 180;
-    const bearing = lastHeading * Math.PI / 180;
-    const predLat = Math.asin(
-      Math.sin(lat1) * Math.cos(d) + Math.cos(lat1) * Math.sin(d) * Math.cos(bearing)
-    );
-    const predLng = lng1 + Math.atan2(
-      Math.sin(bearing) * Math.sin(d) * Math.cos(lat1),
-      Math.cos(d) - Math.sin(lat1) * Math.sin(predLat)
-    );
-    const predictedCoords = {
-      lat: predLat * 180 / Math.PI,
-      lng: predLng * 180 / Math.PI,
-    };
-    driverMarker.setLatLng(predictedCoords);
-    smoothPan(predictedCoords);
-    if (accuracyCircle) accuracyCircle.setLatLng(predictedCoords);
-    if (driverMarker.setRotationAngle) {
-      driverMarker.setRotationAngle(lastHeading);
-    }
-  }
-
-  // ===== GPS HANDLERS =====
-  function handlePositionUpdate(pos) {
-    const { latitude: lat, longitude: lng, accuracy, speed, heading } = pos.coords;
-
-    if (accuracy > MAX_ACCEPTABLE_ACCURACY) {
-      logStatus(`Ignoring low-accuracy fix (${accuracy.toFixed(0)}m)`);
-      return;
-    }
-
-    const newCoords = { lat, lng };
-    if (lastCoords) {
-      const distance = haversineDistance(lastCoords, newCoords);
-      if (distance < MIN_MOVEMENT) {
-        logStatus(`Ignored tiny movement (${distance.toFixed(1)}m)`);
-        return;
-      }
-    }
-
-    lastCoords = newCoords;
-    lastTimestamp = Date.now();
-    lastSpeed = speed ?? 0;
-    lastHeading = heading ?? lastHeading;
-    driverCoords = newCoords;
-
-    if (!mapInitialized) {
-      firstFixes.push(driverCoords);
-      if (firstFixes.length < REQUIRED_FIXES) {
-        logStatus(`Waiting for GPS lock... (${firstFixes.length}/${REQUIRED_FIXES})`);
-        return;
-      }
-
-      const avg = averageFixes(firstFixes);
-      map = L.map("map").setView([avg.lat, avg.lng], 15);
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        maxZoom: 19,
-        attribution: '&copy; OpenStreetMap contributors'
-      }).addTo(map);
-
-      driverMarker = L.marker([avg.lat, avg.lng], {
-        title: DRIVER_ID,
-        rotationAngle: 0,
-        rotationOrigin: "center center"
-      }).addTo(map);
-
-      updateAccuracyCircle(avg.lat, avg.lng, accuracy);
-      connectMQTT();
-      mapInitialized = true;
-      predictionInterval = setInterval(predictPosition, 500);
-      loadingOverlay.style.display = 'none';
-    } else {
-      driverMarker.setLatLng([lat, lng]);
-      smoothPan([lat, lng]);
-      updateAccuracyCircle(lat, lng, accuracy);
-      if (driverMarker.setRotationAngle) {
-        driverMarker.setRotationAngle(lastHeading);
-      }
-    }
-
-    publishLocation();
-
-    if (currentJob && routeLine) {
-      routeLine.setLatLngs([[lat, lng], [currentJob.lat, currentJob.lng]]);
-    }
-
-    logStatus(
-      `GPS: ${lat.toFixed(5)}, ${lng.toFixed(5)} (±${accuracy.toFixed(0)}m) | ` +
-      `Speed: ${(lastSpeed * 3.6).toFixed(1)} km/h | ` +
-      `Heading: ${lastHeading !== null ? lastHeading.toFixed(0) + "°" : "N/A"}`
-    );
-  }
-
-  function handlePositionError(err) {
-    const messages = {
-      1: "GPS permission denied. Please enable location access.",
-      2: "GPS position unavailable. Check your device settings.",
-      3: "GPS request timed out. Trying again...",
-    };
-    alert(messages[err.code] || `GPS error: ${err.message}`);
-    logStatus(`<span class="gps-source gps-poor"></span>GPS error: ${err.message}`);
-  }
-
-  // ===== START GPS =====
-  function initLocationTracking() {
-    if (!navigator.geolocation) {
+  // ===== 2. SIMPLE GPS TRACKING (NO FILTERING, NO COMPASS) =====
+  function initGPS() {
+    if (!('geolocation' in navigator)) {
       alert("Geolocation not supported.");
-      logStatus('<span class="gps-source gps-poor"></span>Geolocation not supported.');
+      statusEl.innerHTML = '<span class="gps-source gps-poor"></span>Geolocation not supported.';
+      connectMQTT();
       return;
     }
 
-    const geoOptions = {
-      enableHighAccuracy: true,
-      maximumAge: 5000,
-      timeout: 10000,
-    };
+    statusEl.innerHTML = '<span class="gps-source gps-poor"></span>Searching for GPS...';
 
-    navigator.geolocation.getCurrentPosition(handlePositionUpdate, handlePositionError, geoOptions);
-    gpsWatchId = navigator.geolocation.watchPosition(handlePositionUpdate, handlePositionError, geoOptions);
+    gpsWatchId = navigator.geolocation.watchPosition(
+      pos => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        const accuracy = pos.coords.accuracy || 50;
+        const heading = pos.coords.heading || 0;
+
+        if (accuracy > 100) return; // Skip very poor accuracy
+
+        driverCoords = { lat, lng };
+
+        // Update marker with heading
+        driverMarker.setLatLng([lat, lng]);
+        driverMarker.setIcon(createDriverIcon(heading));
+        driverMarker.options.title = `Driver: ${DRIVER_ID}`;
+
+        // Smooth map panning
+        const mapCenter = map.getCenter();
+        const dist = calculateDistance(mapCenter.lat, mapCenter.lng, lat, lng);
+        if (dist > 50) map.panTo([lat, lng]);
+
+        // Update route if job active
+        if (currentJob && routeLine) {
+          routeLine.setLatLngs([[lat, lng], [currentJob.lat, currentJob.lng]]);
+        }
+
+        // Publish location
+        publishLocationThrottled(lat, lng, heading);
+
+        // Update status
+        let statusClass = accuracy <= 20 ? 'gps-gps' : accuracy <= 50 ? 'gps-network' : 'gps-poor';
+        statusEl.innerHTML = `
+          <span class="gps-source ${statusClass}"></span>
+          GPS: ${lat.toFixed(5)}, ${lng.toFixed(5)} | 
+          Acc: ±${Math.round(accuracy)}m
+        `;
+      },
+      err => {
+        console.error("GPS Error:", err);
+        statusEl.innerHTML = `<span class="gps-source gps-poor"></span>GPS Error: ${err.message}`;
+      },
+      {
+        enableHighAccuracy: true,
+        maximumAge: 0,
+        timeout: 8000
+      }
+    );
+
+    connectMQTT();
   }
 
-  // ===== REST OF LOGIC (UNCHANGED) =====
-  function toggleMenu() {
-    isMenuOpen = !isMenuOpen;
-    if (isMenuOpen) {
-      menuPanel.classList.add('active');
-      renderCurrentView();
-    } else {
-      menuPanel.classList.remove('active');
+  // ===== THROTTLED LOCATION PUBLISHING =====
+  let lastPublish = 0;
+  let lastPublishCoords = null;
+  function publishLocationThrottled(lat, lng, heading) {
+    const now = Date.now();
+    if (!lastPublishCoords ||
+        calculateDistance(lastPublishCoords.lat, lastPublishCoords.lng, lat, lng) > 5 ||
+        now - lastPublish > 3000) {
+      client?.publish(LOCATION_TOPIC, JSON.stringify({
+        driver: DRIVER_ID,
+        lat,
+        lng,
+        status: 'idle',
+        ts: now,
+        heading: Math.round(heading)
+      }));
+      lastPublish = now;
+      lastPublishCoords = { lat, lng };
     }
   }
 
-  function switchView(view) {
-    currentView = view;
-    menuNavBtns.forEach(btn => {
-      if (btn.dataset.view === view) {
-        btn.classList.add('active');
-      } else {
-        btn.classList.remove('active');
+  // ===== REST OF LOGIC (FROM YOUR ORIGINAL) =====
+  function connectMQTT() {
+    statusEl.innerHTML = `<span class="gps-source gps-poor"></span>Connecting to MQTT as: ${DRIVER_ID}`;
+    client = mqtt.connect(MQTT_BROKER, {
+      clientId: 'driver-' + DRIVER_ID + '-' + Math.random().toString(16).substr(2,8),
+      clean: true,
+      reconnectPeriod: 1000
+    });
+    client.on('connect', () => {
+      statusEl.innerHTML = `<span class="gps-source gps-gps"></span>Connected as: ${DRIVER_ID}`;
+      client.subscribe(REQUEST_TOPIC);
+      client.subscribe(DRIVERS_LOCATION_TOPIC);
+      client.subscribe(CHAT_GROUP_TOPIC);
+      client.subscribe(CHAT_PRIVATE_TOPIC);
+      client.subscribe(JOB_RESULT_TOPIC);
+      setInterval(cleanupOldDrivers, 30000);
+    });
+    client.on('message', (topic, message) => {
+      try {
+        const data = JSON.parse(message.toString());
+        if (topic.startsWith("pubs/requests/")) {
+          currentJob = data;
+          pickupLocation.textContent = `${data.pubName} (${data.lat.toFixed(5)}, ${data.lng.toFixed(5)})`;
+          customerPhone.textContent = data.customerPhone;
+          jobPanel.style.display = 'block';
+          addJobToHistory(data, 'processing');
+        }
+        if (topic.startsWith("jobs/") && topic.endsWith(`/result/${DRIVER_ID}`)) {
+          const jobId = topic.split('/')[1];
+          if (data.result === "won") {
+            statusEl.innerHTML = '<span class="gps-source gps-gps"></span>✅ Job allocated! Pickup: ' + currentJob?.pubName;
+            updateJobStatus(jobId, 'allocated');
+          } else if (data.result === "lost") {
+            statusEl.innerHTML = '<span class="gps-source gps-network"></span>❌ Bid lost. Better luck next time!';
+            updateJobStatus(jobId, 'lost');
+          } else if (data.result === "too_late") {
+            statusEl.innerHTML = '<span class="gps-source gps-poor"></span>⏰ Bid too late - job expired';
+            updateJobStatus(jobId, 'expired');
+          } else if (data.result === "not_allowed") {
+            statusEl.innerHTML = '<span class="gps-source gps-poor"></span>🚫 Not authorized to bid on this job';
+            updateJobStatus(jobId, 'not_allowed');
+          } else if (data.result === "job_timeout") {
+            statusEl.innerHTML = '<span class="gps-source gps-poor"></span>⏰ Job expired - no valid bids received';
+            updateJobStatus(jobId, 'expired');
+          }
+        }
+        if (topic.startsWith("jobs/") && topic.endsWith("/status")) {
+          const jobId = topic.split('/')[1];
+          if (data.driver === DRIVER_ID) {
+            const validStatuses = ['allocated', 'completed', 'lost', 'rejected', 'no_drivers_responded', 'no_acceptance', 'no_valid_acceptance'];
+            if (validStatuses.includes(data.status)) {
+              if (data.status === "allocated") {
+                statusEl.innerHTML = '<span class="gps-source gps-gps"></span>✅ Job allocated! Pickup: ' + currentJob?.pubName;
+                updateJobStatus(jobId, 'allocated');
+              } else if (data.status === "lost") {
+                statusEl.innerHTML = '<span class="gps-source gps-network"></span>❌ Bid lost. Better luck next time!';
+                updateJobStatus(jobId, 'lost');
+              } else if (data.status === "completed") {
+                updateJobStatus(jobId, 'completed');
+              }
+            }
+          }
+        }
+        if (topic.startsWith("drivers/") && topic.endsWith("/location")) {
+          const otherDriverId = topic.split('/')[1];
+          if (otherDriverId === DRIVER_ID) return;
+          if (data.lat !== undefined && data.lng !== undefined) {
+            updateOtherDriverMarker(otherDriverId, data.lat, data.lng, data);
+            driverStatus[otherDriverId] = Date.now();
+            if (isMenuOpen && currentView === 'chat') updateChatList();
+          }
+        }
+        if (topic === CHAT_GROUP_TOPIC) {
+          addMessage('group', data.sender, data.text, data.timestamp);
+        }
+        if (topic.startsWith(`chat/private/${DRIVER_ID}/`)) {
+          const senderId = topic.split('/')[3];
+          addMessage(senderId, senderId, data.text, data.timestamp);
+        }
+      } catch (e) {
+        console.error("MQTT error:", e);
       }
     });
-    renderCurrentView();
   }
 
-  function renderCurrentView() {
-    if (!isMenuOpen) return;
-    if (currentView === 'currentJob') {
-      renderCurrentJob();
-    } else if (currentView === 'jobHistory') {
-      renderJobHistory();
-    } else if (currentView === 'chat') {
-      renderChatView();
-    } else if (currentView === 'settings') {
-      renderSettingsView();
+  // ===== ALL OTHER FUNCTIONS (IDENTICAL TO YOUR ORIGINAL) =====
+  function addJobToHistory(jobData, initialStatus = 'processing') {
+    const job = { ...jobData, status: initialStatus, timestamp: Date.now(), driver: DRIVER_ID };
+    const existingIndex = driverJobs.findIndex(j => j.job === job.job);
+    if (existingIndex >= 0) {
+      driverJobs[existingIndex] = job;
+    } else {
+      driverJobs.unshift(job);
+      if (driverJobs.length > 50) driverJobs = driverJobs.slice(0, 50);
     }
+    saveJobs();
+    if (isMenuOpen && currentView === 'jobHistory') renderJobHistory();
+    if (isMenuOpen && currentView === 'currentJob') renderCurrentJob();
+  }
+
+  function updateJobStatus(jobId, status) {
+    const jobIndex = driverJobs.findIndex(j => j.job === jobId);
+    if (jobIndex >= 0) {
+      driverJobs[jobIndex].status = status;
+      saveJobs();
+      if (isMenuOpen && currentView === 'jobHistory') renderJobHistory();
+      if (isMenuOpen && currentView === 'currentJob') renderCurrentJob();
+    }
+  }
+
+  function saveJobs() {
+    localStorage.setItem(`driver_jobs_${DRIVER_ID}`, JSON.stringify(driverJobs));
   }
 
   function renderCurrentJob() {
@@ -902,41 +930,6 @@ document.addEventListener('DOMContentLoaded', () => {
         <button class="settings-btn" onclick="markJobCompleted('${current.job}')">Mark as Completed</button>
       </div>
     `;
-  }
-
-  function saveJobs() {
-    localStorage.setItem(`driver_jobs_${DRIVER_ID}`, JSON.stringify(driverJobs));
-  }
-
-  function addJobToHistory(jobData, initialStatus = 'processing') {
-    const job = {
-      ...jobData,
-      status: initialStatus,
-      timestamp: Date.now(),
-      driver: DRIVER_ID
-    };
-    const existingIndex = driverJobs.findIndex(j => j.job === job.job);
-    if (existingIndex >= 0) {
-      driverJobs[existingIndex] = job;
-    } else {
-      driverJobs.unshift(job);
-      if (driverJobs.length > 50) {
-        driverJobs = driverJobs.slice(0, 50);
-      }
-    }
-    saveJobs();
-    if (isMenuOpen && currentView === 'jobHistory') renderJobHistory();
-    if (isMenuOpen && currentView === 'currentJob') renderCurrentJob();
-  }
-
-  function updateJobStatus(jobId, status) {
-    const jobIndex = driverJobs.findIndex(j => j.job === jobId);
-    if (jobIndex >= 0) {
-      driverJobs[jobIndex].status = status;
-      saveJobs();
-      if (isMenuOpen && currentView === 'jobHistory') renderJobHistory();
-      if (isMenuOpen && currentView === 'currentJob') renderCurrentJob();
-    }
   }
 
   function renderJobHistory() {
@@ -1165,91 +1158,6 @@ document.addEventListener('DOMContentLoaded', () => {
     return "#" + "00000".substring(0, 6 - c.length) + c;
   }
 
-  function connectMQTT(){
-    statusEl.innerHTML = `<span class="gps-source gps-poor"></span>Connecting to MQTT as: ${DRIVER_ID}`;
-    client = mqtt.connect(MQTT_BROKER, {
-      clientId: 'driver-' + DRIVER_ID + '-' + Math.random().toString(16).substr(2,8),
-      clean: true,
-      reconnectPeriod: 1000
-    });
-    client.on('connect', ()=>{ 
-      statusEl.innerHTML = `<span class="gps-source gps-gps"></span>Connected as: ${DRIVER_ID}`;
-      client.subscribe(REQUEST_TOPIC);
-      client.subscribe(DRIVERS_LOCATION_TOPIC);
-      client.subscribe(CHAT_GROUP_TOPIC);
-      client.subscribe(CHAT_PRIVATE_TOPIC);
-      client.subscribe(JOB_RESULT_TOPIC);
-      if (mapInitialized) publishLocation();
-      setInterval(cleanupOldDrivers, 30000);
-    });
-    client.on('message', (topic, message)=>{ 
-      try{
-        const data = JSON.parse(message.toString());
-        if(topic.startsWith("pubs/requests/")){
-          currentJob = data;
-          pickupLocation.textContent = `${data.pubName} (${data.lat.toFixed(5)}, ${data.lng.toFixed(5)})`;
-          customerPhone.textContent = data.customerPhone;
-          jobPanel.style.display = 'block';
-          addJobToHistory(data, 'processing');
-        }
-        if(topic.startsWith("jobs/") && topic.endsWith(`/result/${DRIVER_ID}`)){
-          const jobId = topic.split('/')[1];
-          if(data.result === "won"){
-            statusEl.innerHTML = '<span class="gps-source gps-gps"></span>✅ Job allocated! Pickup: ' + currentJob?.pubName;
-            updateJobStatus(jobId, 'allocated');
-          } else if(data.result === "lost"){
-            statusEl.innerHTML = '<span class="gps-source gps-network"></span>❌ Bid lost. Better luck next time!';
-            updateJobStatus(jobId, 'lost');
-          } else if(data.result === "too_late"){
-            statusEl.innerHTML = '<span class="gps-source gps-poor"></span>⏰ Bid too late - job expired';
-            updateJobStatus(jobId, 'expired');
-          } else if(data.result === "not_allowed"){
-            statusEl.innerHTML = '<span class="gps-source gps-poor"></span>🚫 Not authorized to bid on this job';
-            updateJobStatus(jobId, 'not_allowed');
-          } else if(data.result === "job_timeout"){
-            statusEl.innerHTML = '<span class="gps-source gps-poor"></span>⏰ Job expired - no valid bids received';
-            updateJobStatus(jobId, 'expired');
-          }
-        }
-        if(topic.startsWith("jobs/") && topic.endsWith("/status")){
-          const jobId = topic.split('/')[1];
-          if(data.driver === DRIVER_ID){
-            const validStatuses = ['allocated', 'completed', 'lost', 'rejected', 'no_drivers_responded', 'no_acceptance', 'no_valid_acceptance'];
-            if (validStatuses.includes(data.status)) {
-              if(data.status === "allocated"){
-                statusEl.innerHTML = '<span class="gps-source gps-gps"></span>✅ Job allocated! Pickup: ' + currentJob?.pubName;
-                updateJobStatus(jobId, 'allocated');
-              } else if(data.status === "lost"){
-                statusEl.innerHTML = '<span class="gps-source gps-network"></span>❌ Bid lost. Better luck next time!';
-                updateJobStatus(jobId, 'lost');
-              } else if(data.status === "completed"){
-                updateJobStatus(jobId, 'completed');
-              }
-            }
-          }
-        }
-        if(topic.startsWith("drivers/") && topic.endsWith("/location")){
-          const otherDriverId = topic.split('/')[1];
-          if(otherDriverId === DRIVER_ID) return;
-          if(data.lat !== undefined && data.lng !== undefined) {
-            updateOtherDriverMarker(otherDriverId, data.lat, data.lng, data);
-            driverStatus[otherDriverId] = Date.now();
-            if (isMenuOpen && currentView === 'chat') updateChatList();
-          }
-        }
-        if(topic === CHAT_GROUP_TOPIC) {
-          addMessage('group', data.sender, data.text, data.timestamp);
-        }
-        if(topic.startsWith(`chat/private/${DRIVER_ID}/`)) {
-          const senderId = topic.split('/')[3];
-          addMessage(senderId, senderId, data.text, data.timestamp);
-        }
-      } catch(e){ 
-        console.error("MQTT parse error:", e); 
-      }
-    });
-  }
-
   function updateOtherDriverMarker(driverId, lat, lng, data) {
     const now = Date.now();
     if (!otherDrivers[driverId]) {
@@ -1263,11 +1171,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }),
         title: driverId
       }).addTo(map);
-      otherDrivers[driverId] = {
-        marker: marker,
-        lastUpdate: now,
-        data
-      };
+      otherDrivers[driverId] = { marker, lastUpdate: now, data };
     } else {
       otherDrivers[driverId].marker.setLatLng([lat, lng]);
       otherDrivers[driverId].lastUpdate = now;
@@ -1292,36 +1196,47 @@ document.addEventListener('DOMContentLoaded', () => {
     if (isMenuOpen && currentView === 'chat') updateChatList();
   }
 
-  function respondToJob(accepted){
-    if(!currentJob || !client) return;
-    if(accepted){
-      let bidLat, bidLng;
-      if (driverCoords) {
-        bidLat = driverCoords.lat;
-        bidLng = driverCoords.lng;
-      } else {
-        bidLat = currentJob.lat;
-        bidLng = currentJob.lng;
-        statusEl.innerHTML = '<span class="gps-source gps-poor"></span>⚠️ Using pub location (location unavailable)';
-      }
-      const payload = { 
-        driver: DRIVER_ID, 
-        lat: bidLat,
-        lng: bidLng
-      };
+  function respondToJob(accepted) {
+    if (!currentJob || !client) return;
+    if (accepted) {
+      let bidLat = driverCoords?.lat || currentJob.lat;
+      let bidLng = driverCoords?.lng || currentJob.lng;
+      const payload = { driver: DRIVER_ID, lat: bidLat, lng: bidLng };
       client.publish(`jobs/${currentJob.job}/accept`, JSON.stringify(payload));
       statusEl.innerHTML = '<span class="gps-source gps-gps"></span>✅ Bid sent for job ' + currentJob.job;
       updateJobStatus(currentJob.job, 'bidding');
     } else {
-      const payload = { job: currentJob.job, driver: DRIVER_ID, status: "rejected", ts:Date.now() };
+      const payload = { job: currentJob.job, driver: DRIVER_ID, status: "rejected", ts: Date.now() };
       client.publish(`jobs/${currentJob.job}/status`, JSON.stringify(payload));
       statusEl.innerHTML = '<span class="gps-source gps-network"></span>❌ Job rejected';
       updateJobStatus(currentJob.job, 'rejected');
     }
     jobPanel.style.display = 'none';
-    if(pickupMarker){ map.removeLayer(pickupMarker); pickupMarker = null; }
-    if(routeLine){ map.removeLayer(routeLine); routeLine = null; }
+    if (pickupMarker) { map.removeLayer(pickupMarker); pickupMarker = null; }
+    if (routeLine) { map.removeLayer(routeLine); routeLine = null; }
     currentJob = null;
+  }
+
+  function toggleMenu() {
+    isMenuOpen = !isMenuOpen;
+    menuPanel.classList.toggle('active', isMenuOpen);
+    if (isMenuOpen) renderCurrentView();
+  }
+
+  function switchView(view) {
+    currentView = view;
+    menuNavBtns.forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.view === view);
+    });
+    renderCurrentView();
+  }
+
+  function renderCurrentView() {
+    if (!isMenuOpen) return;
+    if (currentView === 'currentJob') renderCurrentJob();
+    else if (currentView === 'jobHistory') renderJobHistory();
+    else if (currentView === 'chat') renderChatView();
+    else if (currentView === 'settings') renderSettingsView();
   }
 
   // ===== EVENT LISTENERS =====
@@ -1329,27 +1244,21 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('rejectBtn').addEventListener('click', () => respondToJob(false));
   document.getElementById('menuBtn').addEventListener('click', toggleMenu);
   document.querySelectorAll('.menu-nav-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      switchView(btn.dataset.view);
-    });
+    btn.addEventListener('click', () => switchView(btn.dataset.view));
   });
   document.addEventListener('click', (e) => {
-    if (isMenuOpen && 
-        !menuPanel.contains(e.target) && 
-        e.target !== document.getElementById('menuBtn')) {
+    if (isMenuOpen && !menuPanel.contains(e.target) && e.target !== document.getElementById('menuBtn')) {
       isMenuOpen = false;
       menuPanel.classList.remove('active');
     }
   });
 
-  // ===== CLEANUP =====
   window.addEventListener('beforeunload', () => {
     if (gpsWatchId) navigator.geolocation.clearWatch(gpsWatchId);
-    if (predictionInterval) clearInterval(predictionInterval);
   });
 
-  // ===== START APP =====
-  initLocationTracking();
+  // ===== START IMMEDIATELY =====
+  initMapImmediately();
   renderCurrentJob();
 });
   </script>
