@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Black Cab Unite version 1.0.1</title>
+  <title>Black Cab Unite</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
   <style>
@@ -454,7 +454,7 @@
 <body>
   <div id="map"></div>
   <div id="headerBanner">
-    <div id="appTitle">Black Cab Unite v 1.0.1</div>
+    <div id="appTitle">Black Cab Unite</div>
     <button id="menuBtn">☰</button>
   </div>
   <div id="status">Initializing...</div>
@@ -465,7 +465,7 @@
       <div class="job-info-value" id="pickupLocation">Loading...</div>
       <div class="job-info-label" style="margin-top:12px;">Customer Phone</div>
       <div class="job-info-value" id="customerPhone">Loading...</div>
-      <div id="jobTimer">⏳ Expires in: <span id="timerSeconds">32</span>s</div>
+      <div id="jobTimer">⏳ Expires in: <span id="timerSeconds">60</span>s</div>
     </div>
     <div class="job-actions">
       <button class="job-btn accept-btn" id="acceptBtn">✅ ACCEPT JOB</button>
@@ -1068,25 +1068,22 @@ document.addEventListener('DOMContentLoaded', () => {
       try{
         const data = JSON.parse(message.toString());
         if(topic.startsWith("pubs/requests/")){
-          // === STORE RECEIVE TIME FOR ACCURATE EXPIRY ===
+          // === STORE RECEIVE TIME AND CHECK FOR expiresAt ===
           currentJob = { ...data, _receivedAt: Date.now() };
           pickupLocation.textContent = `${data.pubName} (${data.lat.toFixed(5)}, ${data.lng.toFixed(5)})`;
           customerPhone.textContent = data.customerPhone;
           jobPanel.style.display = 'block';
           addJobToHistory(data, 'processing');
 
-          // === IMPROVED TIMER WITH GRACE & ALIGNMENT ===
+          // === USE expiresAt IF PROVIDED, OTHERWISE DEFAULT TO 60s ===
+          const expiresAt = data.expiresAt || (Date.now() + 60_000);
           const timerEl = document.getElementById('jobTimer');
           const secondsEl = document.getElementById('timerSeconds');
           timerEl.style.display = 'block';
-          secondsEl.textContent = '32'; // show 32s to reflect grace
-
-          const EXPIRY_GRACE_MS = 32_000;
-          const startTime = Date.now();
 
           function updateTimer() {
-            const elapsed = Date.now() - startTime;
-            const remainingMs = EXPIRY_GRACE_MS - elapsed;
+            const now = Date.now();
+            const remainingMs = expiresAt - now;
             const secondsLeft = Math.ceil(remainingMs / 1000);
 
             if (remainingMs <= 0) {
@@ -1097,8 +1094,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             secondsEl.textContent = Math.max(1, secondsLeft);
-            const nextTick = Date.now() + (1000 - (Date.now() % 1000));
-            setTimeout(updateTimer, nextTick - Date.now());
+            const nextTick = now + (1000 - (now % 1000));
+            setTimeout(updateTimer, nextTick - now);
           }
 
           updateTimer();
@@ -1228,15 +1225,15 @@ document.addEventListener('DOMContentLoaded', () => {
     if(!currentJob || !client) return;
 
     // 🔒 FINAL EXPIRY CHECK BEFORE SENDING ACCEPT
-    if (accepted) {
-      const elapsed = Date.now() - (currentJob._receivedAt || 0);
-      if (elapsed > 32_000) {
-        jobPanel.style.display = 'none';
-        currentJob = null;
-        statusEl.innerHTML = '<span class="gps-source gps-poor"></span>⏰ Too late — job expired';
-        return;
-      }
+    const expiresAt = currentJob.expiresAt || (currentJob._receivedAt + 60_000);
+    if (accepted && Date.now() >= expiresAt) {
+      jobPanel.style.display = 'none';
+      currentJob = null;
+      statusEl.innerHTML = '<span class="gps-source gps-poor"></span>⏰ Too late — job expired';
+      return;
+    }
 
+    if(accepted){
       let bidLat = driverCoords?.lat || currentJob.lat;
       let bidLng = driverCoords?.lng || currentJob.lng;
       const payload = { driver: DRIVER_ID, lat: bidLat, lng: bidLng };
@@ -1277,4 +1274,3 @@ document.addEventListener('DOMContentLoaded', () => {
   </script>
 </body>
 </html>
-
