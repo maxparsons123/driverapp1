@@ -465,7 +465,7 @@
       <div class="job-info-value" id="pickupLocation">Loading...</div>
       <div class="job-info-label" style="margin-top:12px;">Customer Phone</div>
       <div class="job-info-value" id="customerPhone">Loading...</div>
-      <div id="jobTimer">⏳ Expires in: <span id="timerSeconds">30</span>s</div>
+      <div id="jobTimer">⏳ Expires in: <span id="timerSeconds">32</span>s</div>
     </div>
     <div class="job-actions">
       <button class="job-btn accept-btn" id="acceptBtn">✅ ACCEPT JOB</button>
@@ -485,7 +485,6 @@
     </div>
     <div id="menuContent"></div>
   </div>
-
   <!-- JOB WON MODAL -->
   <div id="jobWonModal" style="
     display: none;
@@ -519,7 +518,6 @@
       ">Close</button>
     </div>
   </div>
-
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
   <script>
@@ -540,7 +538,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     localStorage.setItem('driver_id', DRIVER_ID);
   }
-
   // ===== TTS INITIALIZER =====
   let ttsInitialized = false;
   function initTTS() {
@@ -552,7 +549,6 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   document.body.addEventListener('click', initTTS, { once: true });
   document.body.addEventListener('touchstart', initTTS, { once: true });
-
   const MQTT_BROKER = "wss://broker.hivemq.com:8884/mqtt"; 
   const REQUEST_TOPIC = "pubs/requests/+";
   const LOCATION_TOPIC = `drivers/${DRIVER_ID}/location`;
@@ -560,7 +556,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const CHAT_GROUP_TOPIC = "chat/group";
   const CHAT_PRIVATE_TOPIC = `chat/private/${DRIVER_ID}/+`;
   const JOB_RESULT_TOPIC = `jobs/+/result/${DRIVER_ID}`;
-
   let driverCoords = null;
   let map = null;
   let driverMarker = null;
@@ -573,13 +568,11 @@ document.addEventListener('DOMContentLoaded', () => {
   let currentView = 'currentJob';
   let gpsWatchId = null;
   let wakeLock = null;
-
   const otherDrivers = {};
   const driverStatus = {};
   const chatMessages = { group: JSON.parse(localStorage.getItem(`chat_group_${DRIVER_ID}`)) || [] };
   const unreadCounts = { group: 0 };
   let driverJobs = JSON.parse(localStorage.getItem(`driver_jobs_${DRIVER_ID}`)) || [];
-
   const statusEl = document.getElementById('status');
   const jobPanel = document.getElementById('jobPanel');
   const pickupLocation = document.getElementById('pickupLocation');
@@ -588,7 +581,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const menuContent = document.getElementById('menuContent');
   const menuNavBtns = document.querySelectorAll('.menu-nav-btn');
   const loadingOverlay = document.getElementById('loadingOverlay');
-
   // ===== BLACK CAB MARKER =====
   const BLACK_CAB_SVG = `
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="36" height="36">
@@ -597,7 +589,6 @@ document.addEventListener('DOMContentLoaded', () => {
   <circle cx="16" cy="14" r="1.5" fill="#fff"/>
 </svg>
 `;
-
   function createBlackCabIcon(heading = 0) {
     const svgUrl = 'data:image/svg+xml;base64,' + btoa(BLACK_CAB_SVG);
     return L.divIcon({
@@ -606,7 +597,6 @@ document.addEventListener('DOMContentLoaded', () => {
       iconAnchor: [18, 18]
     });
   }
-
   // ===== SIMPLE GPS (STABLE) =====
   function calculateDistance(lat1, lon1, lat2, lon2) {
     const R = 6371000;
@@ -617,20 +607,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const a = Math.sin(Δφ/2)**2 + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ/2)**2;
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   }
-
   function updateDriverMarker(lat, lng, headingValue) {
     if (!driverMarker) return;
     driverMarker.setLatLng([lat, lng]);
     driverMarker.setIcon(createBlackCabIcon(headingValue));
   }
-
   function updateMapCenter(lat, lng) {
     if (!map) return;
     const center = map.getCenter();
     const dist = calculateDistance(center.lat, center.lng, lat, lng);
     if (dist > 50) map.panTo([lat, lng]);
   }
-
   let lastPublish = 0;
   let lastPublishCoords = null;
   function publishLocationThrottled(gpsData) {
@@ -650,7 +637,6 @@ document.addEventListener('DOMContentLoaded', () => {
       lastPublishCoords = { lat: gpsData.lat, lng: gpsData.lng };
     }
   }
-
   // ===== WAKE LOCK =====
   async function requestWakeLock() {
     try {
@@ -661,14 +647,12 @@ document.addEventListener('DOMContentLoaded', () => {
       console.warn('Wake Lock failed:', err);
     }
   }
-
   function releaseWakeLock() {
     if (wakeLock) {
       wakeLock.release();
       wakeLock = null;
     }
   }
-
   // ===== MAP INIT =====
   function initMapImmediately() {
     loadingOverlay.style.display = 'none';
@@ -685,7 +669,6 @@ document.addEventListener('DOMContentLoaded', () => {
     statusEl.innerHTML = '<span class="gps-source gps-poor"></span>Map loaded. Getting location...';
     initGPS();
   }
-
   // ===== SIMPLE GPS INIT =====
   function initGPS() {
     if (!('geolocation' in navigator)) {
@@ -694,10 +677,8 @@ document.addEventListener('DOMContentLoaded', () => {
       connectMQTT();
       return;
     }
-
     statusEl.innerHTML = '<span class="gps-source gps-poor"></span>Searching for GPS...';
     requestWakeLock();
-
     gpsWatchId = navigator.geolocation.watchPosition(
       pos => {
         const gpsData = {
@@ -708,21 +689,16 @@ document.addEventListener('DOMContentLoaded', () => {
           heading: pos.coords.heading || 0,
           timestamp: pos.timestamp || Date.now()
         };
-
         driverCoords = gpsData;
         updateDriverMarker(gpsData.lat, gpsData.lng, gpsData.heading);
         updateMapCenter(gpsData.lat, gpsData.lng);
-
         if (currentJob && routeLine) {
           routeLine.setLatLngs([[gpsData.lat, gpsData.lng], [currentJob.lat, currentJob.lng]]);
         }
-
         publishLocationThrottled(gpsData);
-
         let statusClass = 'gps-gps';
         if (gpsData.accuracy > 50) statusClass = 'gps-poor';
         else if (gpsData.accuracy > 20) statusClass = 'gps-network';
-
         statusEl.innerHTML = `
           <span class="gps-source ${statusClass}"></span>
           GPS: ${gpsData.lat.toFixed(5)}, ${gpsData.lng.toFixed(5)} | 
@@ -735,12 +711,9 @@ document.addEventListener('DOMContentLoaded', () => {
       },
       { enableHighAccuracy: true, maximumAge: 0, timeout: 8000 }
     );
-
     connectMQTT();
   }
-
   // ... (all your original menu, chat, job history, settings functions from Pasted_Text_1758814480305.txt) ...
-
   // ===== MENU NAVIGATION =====
   function toggleMenu() {
     isMenuOpen = !isMenuOpen;
@@ -774,7 +747,6 @@ document.addEventListener('DOMContentLoaded', () => {
       renderSettingsView();
     }
   }
-
   // ===== CURRENT JOB VIEW =====
   function renderCurrentJob() {
     const allocatedJobs = driverJobs.filter(job => job.status === 'allocated');
@@ -823,7 +795,6 @@ document.addEventListener('DOMContentLoaded', () => {
       </div>
     `;
   }
-
   // ===== JOB HISTORY MANAGEMENT =====
   function saveJobs() {
     localStorage.setItem(`driver_jobs_${DRIVER_ID}`, JSON.stringify(driverJobs));
@@ -885,7 +856,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     menuContent.appendChild(jobsContainer);
   }
-
   // ===== CHAT FUNCTIONS =====
   function renderChatView() {
     menuContent.innerHTML = `
@@ -1016,7 +986,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     localStorage.setItem(`chat_group_${DRIVER_ID}`, JSON.stringify(chatMessages.group || []));
   }
-
   // ===== SETTINGS VIEW =====
   function renderSettingsView() {
     menuContent.innerHTML = `
@@ -1062,7 +1031,6 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   }
-
   // ===== MARK JOB COMPLETED =====
   window.markJobCompleted = function(jobId) {
     const payload = { job: jobId, driver: DRIVER_ID, status: "completed", ts: Date.now() };
@@ -1070,7 +1038,6 @@ document.addEventListener('DOMContentLoaded', () => {
     updateJobStatus(jobId, 'completed');
     statusEl.innerHTML = '<span class="gps-source gps-gps"></span>✅ Job marked as completed';
   };
-
   // ===== GET COLOR FOR DRIVER =====
   function getColorForDriver(driverId) {
     let hash = 0;
@@ -1080,7 +1047,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const c = (hash & 0x00FFFFFF).toString(16).toUpperCase();
     return "#" + "00000".substring(0, 6 - c.length) + c;
   }
-
   // ===== MQTT =====
   function connectMQTT(){
     statusEl.innerHTML = `<span class="gps-source gps-poor"></span>Connecting to MQTT as: ${DRIVER_ID}`;
@@ -1102,28 +1068,40 @@ document.addEventListener('DOMContentLoaded', () => {
       try{
         const data = JSON.parse(message.toString());
         if(topic.startsWith("pubs/requests/")){
-          currentJob = data;
+          // === STORE RECEIVE TIME FOR ACCURATE EXPIRY ===
+          currentJob = { ...data, _receivedAt: Date.now() };
           pickupLocation.textContent = `${data.pubName} (${data.lat.toFixed(5)}, ${data.lng.toFixed(5)})`;
           customerPhone.textContent = data.customerPhone;
           jobPanel.style.display = 'block';
           addJobToHistory(data, 'processing');
 
-          // === START 30-SECOND TIMER ===
+          // === IMPROVED TIMER WITH GRACE & ALIGNMENT ===
           const timerEl = document.getElementById('jobTimer');
           const secondsEl = document.getElementById('timerSeconds');
           timerEl.style.display = 'block';
-          secondsEl.textContent = '30';
-          let secondsLeft = 30;
-          const timerInterval = setInterval(() => {
-            secondsLeft--;
-            secondsEl.textContent = secondsLeft;
-            if (secondsLeft <= 0) {
-              clearInterval(timerInterval);
+          secondsEl.textContent = '32'; // show 32s to reflect grace
+
+          const EXPIRY_GRACE_MS = 32_000;
+          const startTime = Date.now();
+
+          function updateTimer() {
+            const elapsed = Date.now() - startTime;
+            const remainingMs = EXPIRY_GRACE_MS - elapsed;
+            const secondsLeft = Math.ceil(remainingMs / 1000);
+
+            if (remainingMs <= 0) {
               jobPanel.style.display = 'none';
               currentJob = null;
               statusEl.innerHTML = '<span class="gps-source gps-poor"></span>⏰ Job expired';
+              return;
             }
-          }, 1000);
+
+            secondsEl.textContent = Math.max(1, secondsLeft);
+            const nextTick = Date.now() + (1000 - (Date.now() % 1000));
+            setTimeout(updateTimer, nextTick - Date.now());
+          }
+
+          updateTimer();
 
           // === TTS FOR JOB OFFER ===
           if ('speechSynthesis' in window) {
@@ -1141,7 +1119,6 @@ document.addEventListener('DOMContentLoaded', () => {
           if(data.result === "won"){
             statusEl.innerHTML = '<span class="gps-source gps-gps"></span>✅ Job allocated! Pickup: ' + currentJob?.pubName;
             updateJobStatus(jobId, 'allocated');
-
             // === SHOW JOB-WON MODAL + TTS ===
             const modal = document.getElementById('jobWonModal');
             modal.style.display = 'flex';
@@ -1206,7 +1183,6 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   }
-
   function updateOtherDriverMarker(driverId, lat, lng, data) {
     const now = Date.now();
     if (!otherDrivers[driverId]) {
@@ -1247,11 +1223,20 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     if (isMenuOpen && currentView === 'chat') updateChatList();
   }
-
   // ===== JOB RESPONSE =====
   function respondToJob(accepted){
     if(!currentJob || !client) return;
-    if(accepted){
+
+    // 🔒 FINAL EXPIRY CHECK BEFORE SENDING ACCEPT
+    if (accepted) {
+      const elapsed = Date.now() - (currentJob._receivedAt || 0);
+      if (elapsed > 32_000) {
+        jobPanel.style.display = 'none';
+        currentJob = null;
+        statusEl.innerHTML = '<span class="gps-source gps-poor"></span>⏰ Too late — job expired';
+        return;
+      }
+
       let bidLat = driverCoords?.lat || currentJob.lat;
       let bidLng = driverCoords?.lng || currentJob.lng;
       const payload = { driver: DRIVER_ID, lat: bidLat, lng: bidLng };
@@ -1269,7 +1254,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if(routeLine){ map.removeLayer(routeLine); routeLine = null; }
     currentJob = null;
   }
-
   // ===== EVENT LISTENERS =====
   document.getElementById('acceptBtn').addEventListener('click', () => respondToJob(true));
   document.getElementById('rejectBtn').addEventListener('click', () => respondToJob(false));
@@ -1283,12 +1267,10 @@ document.addEventListener('DOMContentLoaded', () => {
       menuPanel.classList.remove('active');
     }
   });
-
   window.addEventListener('beforeunload', () => {
     if (gpsWatchId) navigator.geolocation.clearWatch(gpsWatchId);
     releaseWakeLock();
   });
-
   initMapImmediately();
   renderCurrentJob();
 });
