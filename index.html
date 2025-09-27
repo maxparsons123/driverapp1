@@ -91,10 +91,10 @@
       border-radius: 50%;
       margin-right: 6px;
     }
-    .gps-gps { background: #28a745; }      /* Green = GPS */
-    .gps-network { background: #17a2b8; }   /* Blue = Network */
-    .gps-poor { background: #ffc107; }      /* Yellow = Poor accuracy */
-    /* Job panel - MOBILE OPTIMIZED */
+    .gps-gps { background: #28a745; }
+    .gps-network { background: #17a2b8; }
+    .gps-poor { background: #ffc107; }
+    /* Job panel */
     #jobPanel { 
       position: absolute;
       bottom: 0;
@@ -130,7 +130,6 @@
       font-size: 16px;
       color: #212529;
     }
-    /* MOBILE-FRIENDLY BUTTONS */
     .job-actions {
       display: flex;
       gap: 16px;
@@ -143,27 +142,15 @@
       border-radius: 16px;
       cursor: pointer;
       font-weight: 700;
-      transition: transform 0.1s ease, box-shadow 0.2s ease;
       min-height: 56px;
-    }
-    .job-btn:active {
-      transform: translateY(1px);
     }
     .accept-btn {
       background: linear-gradient(135deg, #28a745, #20c997);
       color: white;
-      box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
-    }
-    .accept-btn:hover {
-      box-shadow: 0 6px 16px rgba(40, 167, 69, 0.4);
     }
     .reject-btn {
       background: linear-gradient(135deg, #dc3545, #e83e8c);
       color: white;
-      box-shadow: 0 4px 12px rgba(220, 53, 69, 0.3);
-    }
-    .reject-btn:hover {
-      box-shadow: 0 6px 16px rgba(220, 53, 69, 0.4);
     }
     /* Driver icons */
     .driver-icon {
@@ -177,7 +164,6 @@
       font-weight: bold;
       font-size: 12px;
       box-shadow: 0 2px 6px rgba(0,0,0,0.2);
-      transition: transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
     }
     .other-driver-icon {
       width: 32px;
@@ -239,7 +225,6 @@
       display: flex;
       transform: translateY(0);
     }
-    /* 4-Button Navigation Bar */
     #menuNav {
       display: flex;
       background: #f8f9fa;
@@ -254,28 +239,17 @@
       font-size: 15px;
       color: #666;
       cursor: pointer;
-      transition: all 0.2s;
-    }
-    .menu-nav-btn:hover {
-      background: #e9ecef;
     }
     .menu-nav-btn.active {
       color: #1f6feb;
       background: #e8f0fe;
       border-bottom: 3px solid #1f6feb;
     }
-    .menu-nav-btn .icon {
-      display: block;
-      font-size: 22px;
-      margin-bottom: 6px;
-    }
-    /* Menu Content Area */
     #menuContent {
       flex: 1;
       overflow-y: auto;
       padding: 20px;
     }
-    /* Current Job Content */
     .current-job-info {
       padding: 20px;
       background: #e8f5e8;
@@ -307,7 +281,6 @@
       margin-bottom: 20px;
       opacity: 0.7;
     }
-    /* Job History Content */
     .job-item {
       padding: 16px;
       border: 1px solid #eee;
@@ -315,38 +288,13 @@
       margin-bottom: 12px;
       background: #f9f9f9;
     }
-    .job-item.allocated {
-      border-left: 4px solid #28a745;
-      background: #e8f5e8;
-    }
-    .job-item.processing, .job-item.bidding {
-      border-left: 4px solid #1f6feb;
-      background: #e8f0fe;
-    }
-    .job-item.completed {
-      border-left: 4px solid #6c757d;
-      background: #f8f9fa;
-    }
-    .job-item.lost, .job-item.rejected, .job-item.expired {
-      border-left: 4px solid #dc3545;
-      background: #f8d7da;
-    }
-    .job-id {
-      font-weight: 700;
-      color: #1f6feb;
-      margin-bottom: 6px;
-      font-size: 16px;
-    }
-    .job-pub {
-      font-size: 14px;
-      color: #666;
-      margin-bottom: 6px;
-    }
-    .job-phone {
-      font-size: 15px;
-      color: #333;
-      margin-bottom: 6px;
-    }
+    .job-item.allocated { border-left: 4px solid #28a745; background: #e8f5e8; }
+    .job-item.processing, .job-item.bidding { border-left: 4px solid #1f6feb; background: #e8f0fe; }
+    .job-item.completed { border-left: 4px solid #6c757d; background: #f8f9fa; }
+    .job-item.lost, .job-item.rejected, .job-item.expired { border-left: 4px solid #dc3545; background: #f8d7da; }
+    .job-id { font-weight: 700; color: #1f6feb; margin-bottom: 6px; font-size: 16px; }
+    .job-pub { font-size: 14px; color: #666; margin-bottom: 6px; }
+    .job-phone { font-size: 15px; color: #333; margin-bottom: 6px; }
     .job-status {
       font-size: 12px;
       font-weight: 700;
@@ -357,7 +305,6 @@
     .status-allocated { background: #d1e7dd; color: #0f5132; }
     .status-completed { background: #e2e3e5; color: #41464b; }
     .status-lost, .status-rejected, .status-expired { background: #f8d7da; color: #842029; }
-    /* Chat Content */
     #chatMessages {
       flex: 1;
       padding: 16px;
@@ -374,17 +321,8 @@
       line-height: 1.5;
       word-wrap: break-word;
     }
-    .received {
-      background: #e9ecef;
-      align-self: flex-start;
-      border-bottom-left-radius: 6px;
-    }
-    .sent {
-      background: #000;
-      color: white;
-      align-self: flex-end;
-      border-bottom-right-radius: 6px;
-    }
+    .received { background: #e9ecef; align-self: flex-start; border-bottom-left-radius: 6px; }
+    .sent { background: #000; color: white; align-self: flex-end; border-bottom-right-radius: 6px; }
     .message-info {
       font-size: 12px;
       opacity: 0.8;
@@ -426,7 +364,6 @@
       font-size: 20px;
       box-shadow: 0 2px 8px rgba(0,0,0,0.2);
     }
-    /* Chat list */
     #chatList {
       flex: 1;
       overflow-y: auto;
@@ -461,9 +398,7 @@
       border-radius: 50%;
       margin-left: auto;
     }
-    .offline {
-      background: #6c757d;
-    }
+    .offline { background: #6c757d; }
     .unread-badge {
       background: #FFD700;
       color: #000;
@@ -473,7 +408,6 @@
       margin-left: 8px;
       font-weight: 700;
     }
-    /* Settings Content */
     .settings-group {
       margin-bottom: 24px;
     }
@@ -524,14 +458,11 @@
 </head>
 <body>
   <div id="map"></div>
-  <!-- Black Cab Unite Header Banner -->
   <div id="headerBanner">
     <div id="appTitle">Black Cab Unite</div>
     <button id="menuBtn">☰</button>
   </div>
-  <!-- Status bar -->
   <div id="status">Initializing...</div>
-  <!-- Job panel - MOBILE OPTIMIZED -->
   <div id="jobPanel">
     <h2>🚕 New Job Request</h2>
     <div id="jobInfo">
@@ -545,36 +476,18 @@
       <button class="job-btn reject-btn" id="rejectBtn">❌ REJECT</button>
     </div>
   </div>
-  <!-- Loading overlay -->
   <div id="loadingOverlay">
     <div class="loading-spinner"></div>
     <div>Loading map...</div>
   </div>
-  <!-- Main Menu Panel -->
   <div id="menuPanel">
-    <!-- 4-Button Navigation -->
     <div id="menuNav">
-      <button class="menu-nav-btn active" data-view="currentJob">
-        <div class="icon">📍</div>
-        Current Job
-      </button>
-      <button class="menu-nav-btn" data-view="jobHistory">
-        <div class="icon">📋</div>
-        Job History
-      </button>
-      <button class="menu-nav-btn" data-view="chat">
-        <div class="icon">💬</div>
-        Chats
-      </button>
-      <button class="menu-nav-btn" data-view="settings">
-        <div class="icon">⚙️</div>
-        Settings
-      </button>
+      <button class="menu-nav-btn active" data-view="currentJob">📍 Current Job</button>
+      <button class="menu-nav-btn" data-view="jobHistory">📋 Job History</button>
+      <button class="menu-nav-btn" data-view="chat">💬 Chats</button>
+      <button class="menu-nav-btn" data-view="settings">⚙️ Settings</button>
     </div>
-    <!-- Content Area -->
-    <div id="menuContent">
-      <!-- Content will be populated dynamically -->
-    </div>
+    <div id="menuContent"></div>
   </div>
 
   <!-- JOB WON MODAL -->
@@ -632,7 +545,7 @@ document.addEventListener('DOMContentLoaded', () => {
     localStorage.setItem('driver_id', DRIVER_ID);
   }
 
-  // ===== TTS INITIALIZER (FIXES AUTOPLAY BLOCK) =====
+  // ===== TTS INITIALIZER =====
   let ttsInitialized = false;
   function initTTS() {
     if (ttsInitialized || !('speechSynthesis' in window)) return;
@@ -662,33 +575,15 @@ document.addEventListener('DOMContentLoaded', () => {
   let currentChat = null;
   let isMenuOpen = false;
   let currentView = 'currentJob';
-  let gpsInitialized = false;
+  let gpsWatchId = null;
+  let wakeLock = null;
 
-  // Other drivers tracking
   const otherDrivers = {};
   const driverStatus = {};
-  const chatMessages = {
-    group: JSON.parse(localStorage.getItem(`chat_group_${DRIVER_ID}`)) || []
-  };
-  const unreadCounts = {
-    group: 0
-  };
-
-  // Job history storage
+  const chatMessages = { group: JSON.parse(localStorage.getItem(`chat_group_${DRIVER_ID}`)) || [] };
+  const unreadCounts = { group: 0 };
   let driverJobs = JSON.parse(localStorage.getItem(`driver_jobs_${DRIVER_ID}`)) || [];
 
-  // Heading tracking (compass only for rotation)
-  let heading = 0;
-  let useCompass = false;
-  let gpsWatchId = null;
-  let networkWatchId = null;
-
-  // Throttling variables
-  let lastPublish = 0;
-  let lastPublishCoords = null;
-  let lastMapCenter = null;
-
-  // DOM Elements
   const statusEl = document.getElementById('status');
   const jobPanel = document.getElementById('jobPanel');
   const pickupLocation = document.getElementById('pickupLocation');
@@ -698,186 +593,79 @@ document.addEventListener('DOMContentLoaded', () => {
   const menuNavBtns = document.querySelectorAll('.menu-nav-btn');
   const loadingOverlay = document.getElementById('loadingOverlay');
 
-  // ===== ROBUST HYBRID LOCATION SYSTEM (FROM YOUR ORIGINAL FILE) =====
-  class RobustGPS {
-    constructor() {
-      this.filteredLat = null;
-      this.filteredLng = null;
-      this.lastGoodLat = null;
-      this.lastGoodLng = null;
-      this.lastTimestamp = null;
-      this.minDistanceThreshold = 6;    // Increased from 5m
-      this.maxSpeed = 25;               // 25 m/s (90 km/h)
-      this.maxJumpDistance = 100;       // 100m max jump
-      this.minAccuracy = 30;            // Increased from 20m (less strict)
-      this.smoothingFactor = 0.3;       // Heavier smoothing
-    }
-    distance(lat1, lng1, lat2, lng2) {
-      const R = 6371000;
-      const toRad = x => x * Math.PI / 180;
-      const φ1 = toRad(lat1);
-      const φ2 = toRad(lat2);
-      const Δφ = toRad(lat2 - lat1);
-      const Δλ = toRad(lng2 - lng1);
-      const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
-                Math.cos(φ1) * Math.cos(φ2) *
-                Math.sin(Δλ/2) * Math.sin(Δλ/2);
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-      return R * c;
-    }
-    smoothPosition(newLat, newLng, lastLat, lastLng, factor) {
-      return {
-        lat: lastLat + factor * (newLat - lastLat),
-        lng: lastLng + factor * (newLng - lastLng)
-      };
-    }
-    processPosition(newLat, newLng, accuracy, timestamp) {
-      // Reject poor accuracy readings
-      if (accuracy > this.minAccuracy) {
-        return null;
-      }
-      // First reading - initialize
-      if (this.lastTimestamp === null) {
-        this.filteredLat = newLat;
-        this.filteredLng = newLng;
-        this.lastGoodLat = newLat;
-        this.lastGoodLng = newLng;
-        this.lastTimestamp = timestamp;
-        return { lat: newLat, lng: newLng };
-      }
-      const dt = (timestamp - this.lastTimestamp) / 1000;
-      if (dt <= 0) {
-        return { lat: this.filteredLat, lng: this.filteredLng };
-      }
-      // Calculate distance from last good position
-      const distanceFromLast = this.distance(this.lastGoodLat, this.lastGoodLng, newLat, newLng);
-      // Reject extreme jumps
-      if (distanceFromLast > this.maxJumpDistance) {
-        console.warn(`GPS jump rejected: ${distanceFromLast.toFixed(1)}m`);
-        return { lat: this.filteredLat, lng: this.filteredLng };
-      }
-      // Calculate speed
-      const speed = distanceFromLast / dt;
-      // Reject unrealistic speeds
-      if (speed > this.maxSpeed) {
-        console.warn(`GPS speed rejected: ${speed.toFixed(1)} m/s`);
-        return { lat: this.filteredLat, lng: this.filteredLng };
-      }
-      // Apply smoothing
-      const smoothed = this.smoothPosition(
-        newLat, 
-        newLng, 
-        this.filteredLat, 
-        this.filteredLng, 
-        this.smoothingFactor
-      );
-      // Only update if moved significantly
-      const actualDistance = this.distance(this.filteredLat, this.filteredLng, smoothed.lat, smoothed.lng);
-      if (actualDistance < this.minDistanceThreshold && speed < 1) {
-        return { lat: this.filteredLat, lng: this.filteredLng };
-      }
-      this.filteredLat = smoothed.lat;
-      this.filteredLng = smoothed.lng;
-      this.lastGoodLat = newLat;
-      this.lastGoodLng = newLng;
-      this.lastTimestamp = timestamp;
-      return { lat: smoothed.lat, lng: smoothed.lng };
-    }
-    reset() {
-      this.filteredLat = null;
-      this.filteredLng = null;
-      this.lastGoodLat = null;
-      this.lastGoodLng = null;
-      this.lastTimestamp = null;
-    }
+  // ===== SIMPLE GPS FROM YOUR WORKING EXAMPLE =====
+  function calculateDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371000;
+    const φ1 = (lat1 * Math.PI) / 180;
+    const φ2 = (lat2 * Math.PI) / 180;
+    const Δφ = ((lat2 - lat1) * Math.PI) / 180;
+    const Δλ = ((lon2 - lon1) * Math.PI) / 180;
+    const a = Math.sin(Δφ/2)**2 + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ/2)**2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   }
-  const gpsFilter = new RobustGPS();
 
-  // ===== COMPASS FOR ROTATION ONLY =====
-  function initCompass() {
-    if (typeof DeviceOrientationEvent !== 'undefined') {
-      if (typeof DeviceOrientationEvent.requestPermission === 'function') {
-        DeviceOrientationEvent.requestPermission()
-          .then(permissionState => {
-            if (permissionState === 'granted') {
-              window.addEventListener('deviceorientation', handleOrientation);
-              useCompass = true;
-            }
-          })
-          .catch(console.error);
-      } else {
-        try {
-          window.addEventListener('deviceorientation', handleOrientation);
-          useCompass = true;
-        } catch (err) {
-          console.warn("Compass setup error:", err);
-        }
-      }
-    }
-  }
-  function handleOrientation(event) {
-    if (!event) return;
-    let alpha = null;
-    if (event.webkitCompassHeading !== undefined) {
-      alpha = event.webkitCompassHeading;
-    } else if (event.alpha !== undefined && event.absolute) {
-      alpha = event.alpha;
-    }
-    if (alpha !== null && !isNaN(alpha)) {
-      const newHeading = (360 - alpha) % 360;
-      heading = heading * 0.7 + newHeading * 0.3;
-      updateDriverRotation();
-    }
-  }
-  function updateDriverRotation() {
+  function updateDriverMarker(lat, lng, headingValue) {
     if (!driverMarker) return;
+    driverMarker.setLatLng([lat, lng]);
     const iconDiv = driverMarker.getElement();
     if (iconDiv) {
-      iconDiv.style.transform = `rotate(${heading}deg)`;
+      iconDiv.style.transform = `rotate(${headingValue}deg)`;
     }
   }
 
-  // ===== THROTTLED LOCATION PUBLISHING =====
-  function publishLocationThrottled() {
+  function updateMapCenter(lat, lng) {
+    if (!map) return;
+    const center = map.getCenter();
+    const dist = calculateDistance(center.lat, center.lng, lat, lng);
+    if (dist > 50) map.panTo([lat, lng]);
+  }
+
+  let lastPublish = 0;
+  let lastPublishCoords = null;
+  function publishLocationThrottled(gpsData) {
     const now = Date.now();
     if (!lastPublishCoords ||
-        gpsFilter.distance(lastPublishCoords.lat, lastPublishCoords.lng, driverCoords.lat, driverCoords.lng) > 5 ||
+        calculateDistance(lastPublishCoords.lat, lastPublishCoords.lng, gpsData.lat, gpsData.lng) > 5 ||
         now - lastPublish > 3000) {
       client.publish(LOCATION_TOPIC, JSON.stringify({
         driver: DRIVER_ID,
-        lat: driverCoords.lat,
-        lng: driverCoords.lng,
-        status:'idle',
+        lat: gpsData.lat,
+        lng: gpsData.lng,
+        status: 'idle',
         ts: now,
-        heading: Math.round(heading)
+        heading: Math.round(gpsData.heading)
       }));
       lastPublish = now;
-      lastPublishCoords = {...driverCoords};
+      lastPublishCoords = { lat: gpsData.lat, lng: gpsData.lng };
     }
   }
 
-  // ===== SMOOTH MAP PANNING =====
-  function updateMapSmoothly(lat, lng) {
-    if (!map) return;
-    // Only re-center if driver has moved significantly from map center
-    const mapCenter = map.getCenter();
-    const distanceFromCenter = gpsFilter.distance(mapCenter.lat, mapCenter.lng, lat, lng);
-    if (distanceFromCenter > 50) { // 50 meters
-      map.panTo([lat, lng]);
+  // ===== WAKE LOCK =====
+  async function requestWakeLock() {
+    try {
+      if ('wakeLock' in navigator) {
+        wakeLock = await navigator.wakeLock.request('screen');
+      }
+    } catch (err) {
+      console.warn('Wake Lock failed:', err);
     }
-    // Always update marker position
-    driverMarker.setLatLng([lat, lng]);
   }
 
-  // ===== IMMEDIATE MAP INITIALIZATION =====
+  function releaseWakeLock() {
+    if (wakeLock) {
+      wakeLock.release();
+      wakeLock = null;
+    }
+  }
+
+  // ===== MAP INIT (IMMEDIATE) =====
   function initMapImmediately() {
     loadingOverlay.style.display = 'none';
     const defaultCenter = [52.4068, -1.5197];
     map = L.map('map').setView(defaultCenter, 13);
-    lastMapCenter = defaultCenter;
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { 
       maxZoom: 19,
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+      attribution: '&copy; OpenStreetMap contributors'
     }).addTo(map);
     driverMarker = L.marker(defaultCenter, {
       title: "Location Initializing...",
@@ -892,77 +680,60 @@ document.addEventListener('DOMContentLoaded', () => {
     initGPS();
   }
 
-  // ===== GPS INITIALIZATION =====
+  // ===== SIMPLE GPS (NO FILTERING) =====
   function initGPS() {
-    if(!('geolocation' in navigator)){
+    if (!('geolocation' in navigator)) {
       alert("Geolocation not supported.");
       statusEl.innerHTML = '<span class="gps-source gps-poor"></span>Geolocation not supported.';
       connectMQTT();
       return;
     }
-    initCompass();
-    navigator.geolocation.getCurrentPosition(
+
+    statusEl.innerHTML = '<span class="gps-source gps-poor"></span>Searching for GPS...';
+    requestWakeLock();
+
+    gpsWatchId = navigator.geolocation.watchPosition(
       pos => {
-        const lat = pos.coords.latitude;
-        const lng = pos.coords.longitude;
-        const accuracy = pos.coords.accuracy || 50;
-        driverCoords = {lat, lng};
-        lastMapCenter = [lat, lng];
-        map.setView([lat, lng], 15);
-        driverMarker.setLatLng([lat, lng]);
-        driverMarker.options.title = `Driver: ${DRIVER_ID}`;
-        driverMarker.setIcon(L.divIcon({
-          className: 'driver-icon',
-          html: `<div class="driver-icon" style="background:#1f6feb;">${DRIVER_ID.substring(0,2).toUpperCase()}</div>`,
-          iconSize: [36, 36],
-          iconAnchor: [18, 18]
-        }));
-        gpsInitialized = true;
-        connectMQTT();
-        gpsWatchId = navigator.geolocation.watchPosition(
-          pos => {
-            const rawLat = pos.coords.latitude;
-            const rawLng = pos.coords.longitude;
-            const accuracy = pos.coords.accuracy || 50;
-            const timestamp = pos.timestamp || Date.now();
-            // Process with robust filtering
-            const smoothed = gpsFilter.processPosition(rawLat, rawLng, accuracy, timestamp);
-            if (!smoothed) return; // Poor accuracy, skip update
-            driverCoords = {lat: smoothed.lat, lng: smoothed.lng};
-            // Update map with smooth panning
-            updateMapSmoothly(smoothed.lat, smoothed.lng);
-            updateDriverRotation();
-            if(currentJob && routeLine){
-              routeLine.setLatLngs([[smoothed.lat, smoothed.lng], [currentJob.lat, currentJob.lng]]);
-            }
-            publishLocationThrottled();
-            // Update status with GPS indicator
-            statusEl.innerHTML = `<span class="gps-source gps-gps"></span>GPS: ${smoothed.lat.toFixed(5)}, ${smoothed.lng.toFixed(5)} | Acc: ${accuracy.toFixed(0)}m`;
-          },
-          err => {
-            statusEl.textContent = "GPS error: " + err.message;
-            gpsFilter.reset();
-          },
-          { 
-            enableHighAccuracy: true, 
-            maximumAge: 3000, 
-            timeout: 10000 
-          }
-        );
+        const gpsData = {
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+          speed: pos.coords.speed,
+          accuracy: pos.coords.accuracy || 50,
+          heading: pos.coords.heading || 0,
+          timestamp: pos.timestamp || Date.now()
+        };
+
+        driverCoords = gpsData;
+        updateDriverMarker(gpsData.lat, gpsData.lng, gpsData.heading);
+        updateMapCenter(gpsData.lat, gpsData.lng);
+
+        if (currentJob && routeLine) {
+          routeLine.setLatLngs([[gpsData.lat, gpsData.lng], [currentJob.lat, currentJob.lng]]);
+        }
+
+        publishLocationThrottled(gpsData);
+
+        let statusClass = 'gps-gps';
+        if (gpsData.accuracy > 50) statusClass = 'gps-poor';
+        else if (gpsData.accuracy > 20) statusClass = 'gps-network';
+
+        statusEl.innerHTML = `
+          <span class="gps-source ${statusClass}"></span>
+          GPS: ${gpsData.lat.toFixed(5)}, ${gpsData.lng.toFixed(5)} | 
+          Acc: ±${Math.round(gpsData.accuracy)}m | 
+          Speed: ${gpsData.speed ? Math.round(gpsData.speed * 3.6) : '--'} km/h
+        `;
       },
       err => {
-        if(err.code === 1) {
-          alert("GPS permission denied. Please enable location access.");
-          statusEl.innerHTML = '<span class="gps-source gps-poor"></span>GPS permission denied';
-        } else {
-          alert("GPS error: " + err.message);
-          statusEl.innerHTML = '<span class="gps-source gps-poor"></span>GPS unavailable: ' + err.message;
-        }
-        connectMQTT();
+        statusEl.textContent = "GPS error: " + err.message;
       },
-      { enableHighAccuracy: true, timeout: 5000 }
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 8000 }
     );
+
+    connectMQTT();
   }
+
+  // ... (all your original menu, chat, job history, settings functions from Pasted_Text_1758814480305.txt) ...
 
   // ===== MENU NAVIGATION =====
   function toggleMenu() {
@@ -1313,17 +1084,12 @@ document.addEventListener('DOMContentLoaded', () => {
       reconnectPeriod: 1000
     });
     client.on('connect', ()=>{ 
-      statusEl.innerHTML = gpsInitialized ? 
-        `<span class="gps-source gps-gps"></span>Connected as: ${DRIVER_ID}` : 
-        `<span class="gps-source gps-network"></span>Connected as: ${DRIVER_ID} (GPS pending)`;
+      statusEl.innerHTML = `<span class="gps-source gps-gps"></span>Connected as: ${DRIVER_ID}`;
       client.subscribe(REQUEST_TOPIC);
       client.subscribe(DRIVERS_LOCATION_TOPIC);
       client.subscribe(CHAT_GROUP_TOPIC);
       client.subscribe(CHAT_PRIVATE_TOPIC);
       client.subscribe(JOB_RESULT_TOPIC);
-      if (gpsInitialized) {
-        publishLocationThrottled();
-      }
       setInterval(cleanupOldDrivers, 30000);
     });
     client.on('message', (topic, message)=>{ 
@@ -1336,7 +1102,7 @@ document.addEventListener('DOMContentLoaded', () => {
           jobPanel.style.display = 'block';
           addJobToHistory(data, 'processing');
 
-          // === TTS FOR JOB OFFER (NOW WORKS) ===
+          // === TTS FOR JOB OFFER ===
           if ('speechSynthesis' in window) {
             const utterance = new SpeechSynthesisUtterance(
               `New job! Pickup at ${data.pubName}. Customer phone: ${data.customerPhone}`
@@ -1353,9 +1119,16 @@ document.addEventListener('DOMContentLoaded', () => {
             statusEl.innerHTML = '<span class="gps-source gps-gps"></span>✅ Job allocated! Pickup: ' + currentJob?.pubName;
             updateJobStatus(jobId, 'allocated');
 
-            // === SHOW JOB-WON MODAL ===
+            // === SHOW JOB-WON MODAL + TTS ===
             const modal = document.getElementById('jobWonModal');
             modal.style.display = 'flex';
+            if ('speechSynthesis' in window) {
+              const utterance = new SpeechSynthesisUtterance("Driver, you have won the job!");
+              utterance.lang = 'en-GB';
+              utterance.rate = 0.9;
+              speechSynthesis.cancel();
+              speechSynthesis.speak(utterance);
+            }
             document.getElementById('closeJobWonModal').onclick = () => {
               modal.style.display = 'none';
             };
@@ -1366,13 +1139,12 @@ document.addEventListener('DOMContentLoaded', () => {
             statusEl.innerHTML = '<span class="gps-source gps-poor"></span>⏰ Bid too late - job expired';
             updateJobStatus(jobId, 'expired');
           }
-          // ⚠️ REMOVED: "not_allowed" case
+          // ⚠️ REMOVED: "not_allowed"
           else if(data.result === "job_timeout"){
             statusEl.innerHTML = '<span class="gps-source gps-poor"></span>⏰ Job expired - no valid bids received';
             updateJobStatus(jobId, 'expired');
           }
         }
-        // Only process valid statuses - ignore "assigned"
         if(topic.startsWith("jobs/") && topic.endsWith("/status")){
           const jobId = topic.split('/')[1];
           if(data.driver === DRIVER_ID){
@@ -1453,24 +1225,13 @@ document.addEventListener('DOMContentLoaded', () => {
     if (isMenuOpen && currentView === 'chat') updateChatList();
   }
 
-  // ===== JOB RESPONSE - GPS INDEPENDENT =====
+  // ===== JOB RESPONSE =====
   function respondToJob(accepted){
     if(!currentJob || !client) return;
     if(accepted){
-      let bidLat, bidLng;
-      if (driverCoords) {
-        bidLat = driverCoords.lat;
-        bidLng = driverCoords.lng;
-      } else {
-        bidLat = currentJob.lat;
-        bidLng = currentJob.lng;
-        statusEl.innerHTML = '<span class="gps-source gps-poor"></span>⚠️ Using pub location (location unavailable)';
-      }
-      const payload = { 
-        driver: DRIVER_ID, 
-        lat: bidLat,
-        lng: bidLng
-      };
+      let bidLat = driverCoords?.lat || currentJob.lat;
+      let bidLng = driverCoords?.lng || currentJob.lng;
+      const payload = { driver: DRIVER_ID, lat: bidLat, lng: bidLng };
       client.publish(`jobs/${currentJob.job}/accept`, JSON.stringify(payload));
       statusEl.innerHTML = '<span class="gps-source gps-gps"></span>✅ Bid sent for job ' + currentJob.job;
       updateJobStatus(currentJob.job, 'bidding');
@@ -1491,26 +1252,20 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('rejectBtn').addEventListener('click', () => respondToJob(false));
   document.getElementById('menuBtn').addEventListener('click', toggleMenu);
   document.querySelectorAll('.menu-nav-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      switchView(btn.dataset.view);
-    });
+    btn.addEventListener('click', () => switchView(btn.dataset.view));
   });
   document.addEventListener('click', (e) => {
-    if (isMenuOpen && 
-        !menuPanel.contains(e.target) && 
-        e.target !== document.getElementById('menuBtn')) {
+    if (isMenuOpen && !menuPanel.contains(e.target) && e.target !== document.getElementById('menuBtn')) {
       isMenuOpen = false;
       menuPanel.classList.remove('active');
     }
   });
 
-  // ===== CLEANUP ON UNLOAD =====
   window.addEventListener('beforeunload', () => {
     if (gpsWatchId) navigator.geolocation.clearWatch(gpsWatchId);
-    if (networkWatchId) navigator.geolocation.clearWatch(networkWatchId);
+    releaseWakeLock();
   });
 
-  // ===== INITIALIZE IMMEDIATELY =====
   initMapImmediately();
   renderCurrentJob();
 });
