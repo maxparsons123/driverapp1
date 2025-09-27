@@ -130,6 +130,13 @@
       font-size: 16px;
       color: #212529;
     }
+    #jobTimer {
+      margin-top: 12px;
+      font-size: 14px;
+      color: #dc3545;
+      font-weight: bold;
+      display: none;
+    }
     .job-actions {
       display: flex;
       gap: 16px;
@@ -153,18 +160,6 @@
       color: white;
     }
     /* Driver icons */
-    .driver-icon {
-      width: 36px;
-      height: 36px;
-      border-radius: 6px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: white;
-      font-weight: bold;
-      font-size: 12px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
-    }
     .other-driver-icon {
       width: 32px;
       height: 32px;
@@ -470,6 +465,7 @@
       <div class="job-info-value" id="pickupLocation">Loading...</div>
       <div class="job-info-label" style="margin-top:12px;">Customer Phone</div>
       <div class="job-info-value" id="customerPhone">Loading...</div>
+      <div id="jobTimer">⏳ Expires in: <span id="timerSeconds">30</span>s</div>
     </div>
     <div class="job-actions">
       <button class="job-btn accept-btn" id="acceptBtn">✅ ACCEPT JOB</button>
@@ -593,7 +589,25 @@ document.addEventListener('DOMContentLoaded', () => {
   const menuNavBtns = document.querySelectorAll('.menu-nav-btn');
   const loadingOverlay = document.getElementById('loadingOverlay');
 
-  // ===== SIMPLE GPS FROM YOUR WORKING EXAMPLE =====
+  // ===== BLACK CAB MARKER =====
+  const BLACK_CAB_SVG = `
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="36" height="36">
+  <path fill="#000" d="M18 4H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zM6 6h12v2H6V6zm0 10V9h12v7H6z"/>
+  <circle cx="8" cy="14" r="1.5" fill="#fff"/>
+  <circle cx="16" cy="14" r="1.5" fill="#fff"/>
+</svg>
+`;
+
+  function createBlackCabIcon(heading = 0) {
+    const svgUrl = 'data:image/svg+xml;base64,' + btoa(BLACK_CAB_SVG);
+    return L.divIcon({
+      html: `<img src="${svgUrl}" style="width:36px; height:36px; transform: rotate(${heading}deg);">`,
+      iconSize: [36, 36],
+      iconAnchor: [18, 18]
+    });
+  }
+
+  // ===== SIMPLE GPS (STABLE) =====
   function calculateDistance(lat1, lon1, lat2, lon2) {
     const R = 6371000;
     const φ1 = (lat1 * Math.PI) / 180;
@@ -607,10 +621,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function updateDriverMarker(lat, lng, headingValue) {
     if (!driverMarker) return;
     driverMarker.setLatLng([lat, lng]);
-    const iconDiv = driverMarker.getElement();
-    if (iconDiv) {
-      iconDiv.style.transform = `rotate(${headingValue}deg)`;
-    }
+    driverMarker.setIcon(createBlackCabIcon(headingValue));
   }
 
   function updateMapCenter(lat, lng) {
@@ -658,7 +669,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // ===== MAP INIT (IMMEDIATE) =====
+  // ===== MAP INIT =====
   function initMapImmediately() {
     loadingOverlay.style.display = 'none';
     const defaultCenter = [52.4068, -1.5197];
@@ -669,18 +680,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }).addTo(map);
     driverMarker = L.marker(defaultCenter, {
       title: "Location Initializing...",
-      icon: L.divIcon({
-        className: 'driver-icon',
-        html: `<div class="driver-icon" style="background:#6c757d;">?</div>`,
-        iconSize: [36, 36],
-        iconAnchor: [18, 18]
-      })
+      icon: createBlackCabIcon(0)
     }).addTo(map);
     statusEl.innerHTML = '<span class="gps-source gps-poor"></span>Map loaded. Getting location...';
     initGPS();
   }
 
-  // ===== SIMPLE GPS (NO FILTERING) =====
+  // ===== SIMPLE GPS INIT =====
   function initGPS() {
     if (!('geolocation' in navigator)) {
       alert("Geolocation not supported.");
@@ -1101,6 +1107,23 @@ document.addEventListener('DOMContentLoaded', () => {
           customerPhone.textContent = data.customerPhone;
           jobPanel.style.display = 'block';
           addJobToHistory(data, 'processing');
+
+          // === START 30-SECOND TIMER ===
+          const timerEl = document.getElementById('jobTimer');
+          const secondsEl = document.getElementById('timerSeconds');
+          timerEl.style.display = 'block';
+          secondsEl.textContent = '30';
+          let secondsLeft = 30;
+          const timerInterval = setInterval(() => {
+            secondsLeft--;
+            secondsEl.textContent = secondsLeft;
+            if (secondsLeft <= 0) {
+              clearInterval(timerInterval);
+              jobPanel.style.display = 'none';
+              currentJob = null;
+              statusEl.innerHTML = '<span class="gps-source gps-poor"></span>⏰ Job expired';
+            }
+          }, 1000);
 
           // === TTS FOR JOB OFFER ===
           if ('speechSynthesis' in window) {
