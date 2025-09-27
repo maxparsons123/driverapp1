@@ -94,22 +94,6 @@
     .gps-gps { background: #28a745; }      /* Green = GPS */
     .gps-network { background: #17a2b8; }   /* Blue = Network */
     .gps-poor { background: #ffc107; }      /* Yellow = Poor accuracy */
-
-    /* ===== NEW: JOB TIMER BAR ===== */
-    #jobTimerBar {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 6px;
-      background: #dc3545;
-      z-index: 1002;
-      transform-origin: left;
-      transform: scaleX(1);
-      transition: transform 1s linear;
-      display: none;
-    }
-
     /* Job panel - MOBILE OPTIMIZED */
     #jobPanel { 
       position: absolute;
@@ -540,10 +524,6 @@
 </head>
 <body>
   <div id="map"></div>
-
-  <!-- ===== NEW: JOB TIMER BAR ===== -->
-  <div id="jobTimerBar"></div>
-
   <!-- Black Cab Unite Header Banner -->
   <div id="headerBanner">
     <div id="appTitle">Black Cab Unite</div>
@@ -551,7 +531,7 @@
   </div>
   <!-- Status bar -->
   <div id="status">Initializing...</div>
-  <!-- Job panel - MOBILE OPTIMIZED -->
+  <!-- Job panel - MOBILE OPTIMIZED (WITH TIMER) -->
   <div id="jobPanel">
     <h2>🚕 New Job Request</h2>
     <div id="jobInfo">
@@ -559,6 +539,10 @@
       <div class="job-info-value" id="pickupLocation">Loading...</div>
       <div class="job-info-label" style="margin-top:12px;">Customer Phone</div>
       <div class="job-info-value" id="customerPhone">Loading...</div>
+      <!-- NEW TIMER INSIDE PANEL -->
+      <div id="jobTimer" style="margin-top:14px; font-size:15px; color:#dc3545; font-weight:bold; display:none;">
+        ⏳ Expires in: <span id="timerSeconds">30</span> seconds
+      </div>
     </div>
     <div class="job-actions">
       <button class="job-btn accept-btn" id="acceptBtn">✅ ACCEPT JOB</button>
@@ -600,22 +584,38 @@
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
   <script>
 document.addEventListener('DOMContentLoaded', () => {
-  // ===== SCREEN WAKE LOCK (NEW) =====
+  // ===== SCREEN WAKE LOCK (USER-ACTIVATED) =====
   let wakeLock = null;
-  async function enableWakeLock() {
-    if ('wakeLock' in navigator) {
-      try {
-        wakeLock = await navigator.wakeLock.request('screen');
-        wakeLock.addEventListener('release', () => {});
-        console.log("Screen wake lock active");
-      } catch (err) {
-        console.warn("Wake Lock not supported or denied:", err);
-      }
+  let wakeLockActive = false;
+  async function requestWakeLock() {
+    if (!('wakeLock' in navigator)) {
+      console.warn("Wake Lock API not supported");
+      return;
+    }
+    try {
+      wakeLock = await navigator.wakeLock.request('screen');
+      wakeLockActive = true;
+      console.log("✅ Wake Lock active");
+
+      wakeLock.addEventListener('release', () => {
+        console.log("⚠️ Wake Lock released, re-requesting...");
+        requestWakeLock();
+      });
+    } catch (err) {
+      console.error("Wake Lock failed:", err.name, err.message);
     }
   }
-  enableWakeLock(); // Activate immediately
+  function enableWakeLockOnce() {
+    if (!wakeLockActive) {
+      requestWakeLock();
+      document.removeEventListener('click', enableWakeLockOnce);
+      document.removeEventListener('touchstart', enableWakeLockOnce);
+    }
+  }
+  document.addEventListener('click', enableWakeLockOnce);
+  document.addEventListener('touchstart', enableWakeLockOnce);
 
-  // ===== DRIVER REGISTRATION (UNCHANGED) =====
+  // ===== Driver Registration =====
   let DRIVER_ID = localStorage.getItem('driver_id');
   function validateDriverId(id) {
     if (!id) return false;
@@ -685,39 +685,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const menuContent = document.getElementById('menuContent');
   const menuNavBtns = document.querySelectorAll('.menu-nav-btn');
   const loadingOverlay = document.getElementById('loadingOverlay');
-  const jobTimerBar = document.getElementById('jobTimerBar');
 
-  // ===== NEW: JOB TIMER & TTS FUNCTIONS =====
-  let jobTimerInterval = null;
-  function startJobTimerBar() {
-    jobTimerBar.style.display = 'block';
-    jobTimerBar.style.transform = 'scaleX(1)';
-    let secondsLeft = 30;
-    if (jobTimerInterval) clearInterval(jobTimerInterval);
-    jobTimerInterval = setInterval(() => {
-      secondsLeft--;
-      const progress = secondsLeft / 30;
-      jobTimerBar.style.transform = `scaleX(${progress})`;
-      if (secondsLeft <= 0) {
-        clearInterval(jobTimerInterval);
-        jobTimerBar.style.display = 'none';
-      }
-    }, 1000);
-  }
-
-  function speakJobAloud(jobData) {
-    if (!('speechSynthesis' in window)) return;
-    const utterance = new SpeechSynthesisUtterance();
-    utterance.text = `New job! Pickup at ${jobData.pubName}. Customer phone: ${jobData.customerPhone}`;
-    utterance.lang = 'en-GB';
-    utterance.rate = 0.9;
-    utterance.pitch = 1;
-    utterance.volume = 1;
-    speechSynthesis.cancel();
-    speechSynthesis.speak(utterance);
-  }
-
-  // ===== ROBUST HYBRID LOCATION SYSTEM (UNCHANGED) =====
+  // ===== ROBUST HYBRID LOCATION SYSTEM =====
   class RobustGPS {
     constructor() {
       this.filteredLat = null;
@@ -725,11 +694,11 @@ document.addEventListener('DOMContentLoaded', () => {
       this.lastGoodLat = null;
       this.lastGoodLng = null;
       this.lastTimestamp = null;
-      this.minDistanceThreshold = 6;
-      this.maxSpeed = 25;
-      this.maxJumpDistance = 100;
-      this.minAccuracy = 30;
-      this.smoothingFactor = 0.3;
+      this.minDistanceThreshold = 6;    // Increased from 5m
+      this.maxSpeed = 25;               // 25 m/s (90 km/h)
+      this.maxJumpDistance = 100;       // 100m max jump
+      this.minAccuracy = 30;            // Increased from 20m (less strict)
+      this.smoothingFactor = 0.3;       // Heavier smoothing
     }
     distance(lat1, lng1, lat2, lng2) {
       const R = 6371000;
@@ -751,9 +720,11 @@ document.addEventListener('DOMContentLoaded', () => {
       };
     }
     processPosition(newLat, newLng, accuracy, timestamp) {
+      // Reject poor accuracy readings
       if (accuracy > this.minAccuracy) {
         return null;
       }
+      // First reading - initialize
       if (this.lastTimestamp === null) {
         this.filteredLat = newLat;
         this.filteredLng = newLng;
@@ -766,16 +737,21 @@ document.addEventListener('DOMContentLoaded', () => {
       if (dt <= 0) {
         return { lat: this.filteredLat, lng: this.filteredLng };
       }
+      // Calculate distance from last good position
       const distanceFromLast = this.distance(this.lastGoodLat, this.lastGoodLng, newLat, newLng);
+      // Reject extreme jumps
       if (distanceFromLast > this.maxJumpDistance) {
         console.warn(`GPS jump rejected: ${distanceFromLast.toFixed(1)}m`);
         return { lat: this.filteredLat, lng: this.filteredLng };
       }
+      // Calculate speed
       const speed = distanceFromLast / dt;
+      // Reject unrealistic speeds
       if (speed > this.maxSpeed) {
         console.warn(`GPS speed rejected: ${speed.toFixed(1)} m/s`);
         return { lat: this.filteredLat, lng: this.filteredLng };
       }
+      // Apply smoothing
       const smoothed = this.smoothPosition(
         newLat, 
         newLng, 
@@ -783,6 +759,7 @@ document.addEventListener('DOMContentLoaded', () => {
         this.filteredLng, 
         this.smoothingFactor
       );
+      // Only update if moved significantly
       const actualDistance = this.distance(this.filteredLat, this.filteredLng, smoothed.lat, smoothed.lng);
       if (actualDistance < this.minDistanceThreshold && speed < 1) {
         return { lat: this.filteredLat, lng: this.filteredLng };
@@ -804,7 +781,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   const gpsFilter = new RobustGPS();
 
-  // ===== COMPASS FOR ROTATION ONLY (UNCHANGED) =====
+  // ===== COMPASS FOR ROTATION ONLY =====
   function initCompass() {
     if (typeof DeviceOrientationEvent !== 'undefined') {
       if (typeof DeviceOrientationEvent.requestPermission === 'function') {
@@ -848,7 +825,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // ===== THROTTLED LOCATION PUBLISHING (UNCHANGED) =====
+  // ===== THROTTLED LOCATION PUBLISHING =====
   function publishLocationThrottled() {
     const now = Date.now();
     if (!lastPublishCoords ||
@@ -867,18 +844,20 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // ===== SMOOTH MAP PANNING (UNCHANGED) =====
+  // ===== SMOOTH MAP PANNING =====
   function updateMapSmoothly(lat, lng) {
     if (!map) return;
+    // Only re-center if driver has moved significantly from map center
     const mapCenter = map.getCenter();
     const distanceFromCenter = gpsFilter.distance(mapCenter.lat, mapCenter.lng, lat, lng);
-    if (distanceFromCenter > 50) {
+    if (distanceFromCenter > 50) { // 50 meters
       map.panTo([lat, lng]);
     }
+    // Always update marker position
     driverMarker.setLatLng([lat, lng]);
   }
 
-  // ===== IMMEDIATE MAP INITIALIZATION (UNCHANGED) =====
+  // ===== IMMEDIATE MAP INITIALIZATION =====
   function initMapImmediately() {
     loadingOverlay.style.display = 'none';
     const defaultCenter = [52.4068, -1.5197];
@@ -901,7 +880,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initGPS();
   }
 
-  // ===== GPS INITIALIZATION (UNCHANGED) =====
+  // ===== GPS INITIALIZATION =====
   function initGPS() {
     if(!('geolocation' in navigator)){
       alert("Geolocation not supported.");
@@ -934,15 +913,18 @@ document.addEventListener('DOMContentLoaded', () => {
             const rawLng = pos.coords.longitude;
             const accuracy = pos.coords.accuracy || 50;
             const timestamp = pos.timestamp || Date.now();
+            // Process with robust filtering
             const smoothed = gpsFilter.processPosition(rawLat, rawLng, accuracy, timestamp);
-            if (!smoothed) return;
+            if (!smoothed) return; // Poor accuracy, skip update
             driverCoords = {lat: smoothed.lat, lng: smoothed.lng};
+            // Update map with smooth panning
             updateMapSmoothly(smoothed.lat, smoothed.lng);
             updateDriverRotation();
             if(currentJob && routeLine){
               routeLine.setLatLngs([[smoothed.lat, smoothed.lng], [currentJob.lat, currentJob.lng]]);
             }
             publishLocationThrottled();
+            // Update status with GPS indicator
             statusEl.innerHTML = `<span class="gps-source gps-gps"></span>GPS: ${smoothed.lat.toFixed(5)}, ${smoothed.lng.toFixed(5)} | Acc: ${accuracy.toFixed(0)}m`;
           },
           err => {
@@ -970,7 +952,7 @@ document.addEventListener('DOMContentLoaded', () => {
     );
   }
 
-  // ===== MENU NAVIGATION (UNCHANGED) =====
+  // ===== MENU NAVIGATION =====
   function toggleMenu() {
     isMenuOpen = !isMenuOpen;
     if (isMenuOpen) {
@@ -1004,7 +986,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // ===== CURRENT JOB VIEW (UNCHANGED) =====
+  // ===== CURRENT JOB VIEW =====
   function renderCurrentJob() {
     const allocatedJobs = driverJobs.filter(job => job.status === 'allocated');
     if (allocatedJobs.length === 0) {
@@ -1053,7 +1035,7 @@ document.addEventListener('DOMContentLoaded', () => {
     `;
   }
 
-  // ===== JOB HISTORY MANAGEMENT (UNCHANGED) =====
+  // ===== JOB HISTORY MANAGEMENT =====
   function saveJobs() {
     localStorage.setItem(`driver_jobs_${DRIVER_ID}`, JSON.stringify(driverJobs));
   }
@@ -1115,7 +1097,7 @@ document.addEventListener('DOMContentLoaded', () => {
     menuContent.appendChild(jobsContainer);
   }
 
-  // ===== CHAT FUNCTIONS (UNCHANGED) =====
+  // ===== CHAT FUNCTIONS =====
   function renderChatView() {
     menuContent.innerHTML = `
       <div id="chatContent" style="height:100%; display:flex; flex-direction:column;">
@@ -1246,7 +1228,7 @@ document.addEventListener('DOMContentLoaded', () => {
     localStorage.setItem(`chat_group_${DRIVER_ID}`, JSON.stringify(chatMessages.group || []));
   }
 
-  // ===== SETTINGS VIEW (UNCHANGED) =====
+  // ===== SETTINGS VIEW =====
   function renderSettingsView() {
     menuContent.innerHTML = `
       <div class="settings-group">
@@ -1292,7 +1274,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // ===== MARK JOB COMPLETED (UNCHANGED) =====
+  // ===== MARK JOB COMPLETED =====
   window.markJobCompleted = function(jobId) {
     const payload = { job: jobId, driver: DRIVER_ID, status: "completed", ts: Date.now() };
     client.publish(`jobs/${jobId}/status`, JSON.stringify(payload));
@@ -1300,7 +1282,7 @@ document.addEventListener('DOMContentLoaded', () => {
     statusEl.innerHTML = '<span class="gps-source gps-gps"></span>✅ Job marked as completed';
   };
 
-  // ===== GET COLOR FOR DRIVER (UNCHANGED) =====
+  // ===== GET COLOR FOR DRIVER =====
   function getColorForDriver(driverId) {
     let hash = 0;
     for (let i = 0; i < driverId.length; i++) {
@@ -1310,7 +1292,7 @@ document.addEventListener('DOMContentLoaded', () => {
     return "#" + "00000".substring(0, 6 - c.length) + c;
   }
 
-  // ===== MQTT (MODIFIED TO ADD TIMER + TTS) =====
+  // ===== MQTT =====
   function connectMQTT(){
     statusEl.innerHTML = `<span class="gps-source gps-poor"></span>Connecting to MQTT as: ${DRIVER_ID}`;
     client = mqtt.connect(MQTT_BROKER, {
@@ -1340,11 +1322,36 @@ document.addEventListener('DOMContentLoaded', () => {
           pickupLocation.textContent = `${data.pubName} (${data.lat.toFixed(5)}, ${data.lng.toFixed(5)})`;
           customerPhone.textContent = data.customerPhone;
           jobPanel.style.display = 'block';
-          addJobToHistory(data, 'processing');
 
-          // ===== NEW: START TIMER + SPEAK JOB =====
-          startJobTimerBar();
-          speakJobAloud(data);
+          // === START TIMER INSIDE JOB PANEL ===
+          const timerEl = document.getElementById('jobTimer');
+          const secondsEl = document.getElementById('timerSeconds');
+          timerEl.style.display = 'block';
+          secondsEl.textContent = '30';
+          let secondsLeft = 30;
+          const timerInterval = setInterval(() => {
+            secondsLeft--;
+            secondsEl.textContent = secondsLeft;
+            if (secondsLeft <= 0) {
+              clearInterval(timerInterval);
+              jobPanel.style.display = 'none';
+              currentJob = null;
+              statusEl.innerHTML = '<span class="gps-source gps-poor"></span>⏰ Job expired';
+            }
+          }, 1000);
+
+          // === TEXT-TO-SPEECH ===
+          if ('speechSynthesis' in window) {
+            const utterance = new SpeechSynthesisUtterance(
+              `New job! Pickup at ${data.pubName}. Customer phone: ${data.customerPhone}`
+            );
+            utterance.lang = 'en-GB';
+            utterance.rate = 0.9;
+            speechSynthesis.cancel();
+            speechSynthesis.speak(utterance);
+          }
+
+          addJobToHistory(data, 'processing');
         }
         if(topic.startsWith("jobs/") && topic.endsWith(`/result/${DRIVER_ID}`)){
           const jobId = topic.split('/')[1];
@@ -1357,14 +1364,14 @@ document.addEventListener('DOMContentLoaded', () => {
           } else if(data.result === "too_late"){
             statusEl.innerHTML = '<span class="gps-source gps-poor"></span>⏰ Bid too late - job expired';
             updateJobStatus(jobId, 'expired');
-          } else if(data.result === "not_allowed"){
-            statusEl.innerHTML = '<span class="gps-source gps-poor"></span>🚫 Not authorized to bid on this job';
-            updateJobStatus(jobId, 'not_allowed');
-          } else if(data.result === "job_timeout"){
+          }
+          // ⚠️ REMOVED: "not_allowed" case
+          else if(data.result === "job_timeout"){
             statusEl.innerHTML = '<span class="gps-source gps-poor"></span>⏰ Job expired - no valid bids received';
             updateJobStatus(jobId, 'expired');
           }
         }
+        // Only process valid statuses - ignore "assigned"
         if(topic.startsWith("jobs/") && topic.endsWith("/status")){
           const jobId = topic.split('/')[1];
           if(data.driver === DRIVER_ID){
@@ -1445,7 +1452,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (isMenuOpen && currentView === 'chat') updateChatList();
   }
 
-  // ===== JOB RESPONSE - GPS INDEPENDENT (UNCHANGED) =====
+  // ===== JOB RESPONSE - GPS INDEPENDENT =====
   function respondToJob(accepted){
     if(!currentJob || !client) return;
     if(accepted){
@@ -1478,7 +1485,7 @@ document.addEventListener('DOMContentLoaded', () => {
     currentJob = null;
   }
 
-  // ===== EVENT LISTENERS (UNCHANGED) =====
+  // ===== EVENT LISTENERS =====
   document.getElementById('acceptBtn').addEventListener('click', () => respondToJob(true));
   document.getElementById('rejectBtn').addEventListener('click', () => respondToJob(false));
   document.getElementById('menuBtn').addEventListener('click', toggleMenu);
@@ -1496,14 +1503,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // ===== CLEANUP ON UNLOAD (UNCHANGED) =====
+  // ===== CLEANUP ON UNLOAD =====
   window.addEventListener('beforeunload', () => {
     if (gpsWatchId) navigator.geolocation.clearWatch(gpsWatchId);
     if (networkWatchId) navigator.geolocation.clearWatch(networkWatchId);
-    if (jobTimerInterval) clearInterval(jobTimerInterval);
   });
 
-  // ===== INITIALIZE IMMEDIATELY (UNCHANGED) =====
+  // ===== INITIALIZE IMMEDIATELY =====
   initMapImmediately();
   renderCurrentJob();
 });
