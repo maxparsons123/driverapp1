@@ -531,7 +531,7 @@
   </div>
   <!-- Status bar -->
   <div id="status">Initializing...</div>
-  <!-- Job panel - MOBILE OPTIMIZED (WITH TIMER) -->
+  <!-- Job panel - MOBILE OPTIMIZED -->
   <div id="jobPanel">
     <h2>🚕 New Job Request</h2>
     <div id="jobInfo">
@@ -539,10 +539,6 @@
       <div class="job-info-value" id="pickupLocation">Loading...</div>
       <div class="job-info-label" style="margin-top:12px;">Customer Phone</div>
       <div class="job-info-value" id="customerPhone">Loading...</div>
-      <!-- NEW TIMER INSIDE PANEL -->
-      <div id="jobTimer" style="margin-top:14px; font-size:15px; color:#dc3545; font-weight:bold; display:none;">
-        ⏳ Expires in: <span id="timerSeconds">30</span> seconds
-      </div>
     </div>
     <div class="job-actions">
       <button class="job-btn accept-btn" id="acceptBtn">✅ ACCEPT JOB</button>
@@ -580,41 +576,45 @@
       <!-- Content will be populated dynamically -->
     </div>
   </div>
+
+  <!-- ===== JOB WON MODAL ===== -->
+  <div id="jobWonModal" style="
+    display: none;
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.7);
+    z-index: 2000;
+    justify-content: center;
+    align-items: center;
+  ">
+    <div style="
+      background: white;
+      padding: 30px;
+      border-radius: 16px;
+      text-align: center;
+      max-width: 320px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+    ">
+      <div style="font-size: 60px; margin-bottom: 16px;">🎉</div>
+      <h2 style="margin: 0 0 12px; color: #1f6feb;">You Won the Job!</h2>
+      <p style="margin: 0 0 24px; color: #555;">Get ready to pick up the customer.</p>
+      <button id="closeJobWonModal" style="
+        background: #1f6feb;
+        color: white;
+        border: none;
+        padding: 12px 24px;
+        border-radius: 12px;
+        font-weight: bold;
+        cursor: pointer;
+        width: 100%;
+      ">Close</button>
+    </div>
+  </div>
+
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
   <script>
 document.addEventListener('DOMContentLoaded', () => {
-  // ===== SCREEN WAKE LOCK (USER-ACTIVATED) =====
-  let wakeLock = null;
-  let wakeLockActive = false;
-  async function requestWakeLock() {
-    if (!('wakeLock' in navigator)) {
-      console.warn("Wake Lock API not supported");
-      return;
-    }
-    try {
-      wakeLock = await navigator.wakeLock.request('screen');
-      wakeLockActive = true;
-      console.log("✅ Wake Lock active");
-
-      wakeLock.addEventListener('release', () => {
-        console.log("⚠️ Wake Lock released, re-requesting...");
-        requestWakeLock();
-      });
-    } catch (err) {
-      console.error("Wake Lock failed:", err.name, err.message);
-    }
-  }
-  function enableWakeLockOnce() {
-    if (!wakeLockActive) {
-      requestWakeLock();
-      document.removeEventListener('click', enableWakeLockOnce);
-      document.removeEventListener('touchstart', enableWakeLockOnce);
-    }
-  }
-  document.addEventListener('click', enableWakeLockOnce);
-  document.addEventListener('touchstart', enableWakeLockOnce);
-
   // ===== Driver Registration =====
   let DRIVER_ID = localStorage.getItem('driver_id');
   function validateDriverId(id) {
@@ -686,7 +686,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const menuNavBtns = document.querySelectorAll('.menu-nav-btn');
   const loadingOverlay = document.getElementById('loadingOverlay');
 
-  // ===== ROBUST HYBRID LOCATION SYSTEM =====
+  // ===== ROBUST HYBRID LOCATION SYSTEM (IMPROVED FOR STABILITY) =====
   class RobustGPS {
     constructor() {
       this.filteredLat = null;
@@ -694,11 +694,11 @@ document.addEventListener('DOMContentLoaded', () => {
       this.lastGoodLat = null;
       this.lastGoodLng = null;
       this.lastTimestamp = null;
-      this.minDistanceThreshold = 6;    // Increased from 5m
-      this.maxSpeed = 25;               // 25 m/s (90 km/h)
-      this.maxJumpDistance = 100;       // 100m max jump
-      this.minAccuracy = 30;            // Increased from 20m (less strict)
-      this.smoothingFactor = 0.3;       // Heavier smoothing
+      this.minDistanceThreshold = 8;    // Ignore tiny movements (<8m)
+      this.maxSpeed = 20;               // Max 20 m/s (72 km/h)
+      this.maxJumpDistance = 60;        // Reject jumps >60m
+      this.minAccuracy = 25;            // Only use fixes with ≤25m accuracy
+      this.smoothingFactor = 0.25;      // Stronger smoothing
     }
     distance(lat1, lng1, lat2, lng2) {
       const R = 6371000;
@@ -720,11 +720,9 @@ document.addEventListener('DOMContentLoaded', () => {
       };
     }
     processPosition(newLat, newLng, accuracy, timestamp) {
-      // Reject poor accuracy readings
       if (accuracy > this.minAccuracy) {
         return null;
       }
-      // First reading - initialize
       if (this.lastTimestamp === null) {
         this.filteredLat = newLat;
         this.filteredLng = newLng;
@@ -737,21 +735,16 @@ document.addEventListener('DOMContentLoaded', () => {
       if (dt <= 0) {
         return { lat: this.filteredLat, lng: this.filteredLng };
       }
-      // Calculate distance from last good position
       const distanceFromLast = this.distance(this.lastGoodLat, this.lastGoodLng, newLat, newLng);
-      // Reject extreme jumps
       if (distanceFromLast > this.maxJumpDistance) {
         console.warn(`GPS jump rejected: ${distanceFromLast.toFixed(1)}m`);
         return { lat: this.filteredLat, lng: this.filteredLng };
       }
-      // Calculate speed
       const speed = distanceFromLast / dt;
-      // Reject unrealistic speeds
       if (speed > this.maxSpeed) {
         console.warn(`GPS speed rejected: ${speed.toFixed(1)} m/s`);
         return { lat: this.filteredLat, lng: this.filteredLng };
       }
-      // Apply smoothing
       const smoothed = this.smoothPosition(
         newLat, 
         newLng, 
@@ -759,7 +752,6 @@ document.addEventListener('DOMContentLoaded', () => {
         this.filteredLng, 
         this.smoothingFactor
       );
-      // Only update if moved significantly
       const actualDistance = this.distance(this.filteredLat, this.filteredLng, smoothed.lat, smoothed.lng);
       if (actualDistance < this.minDistanceThreshold && speed < 1) {
         return { lat: this.filteredLat, lng: this.filteredLng };
@@ -847,13 +839,11 @@ document.addEventListener('DOMContentLoaded', () => {
   // ===== SMOOTH MAP PANNING =====
   function updateMapSmoothly(lat, lng) {
     if (!map) return;
-    // Only re-center if driver has moved significantly from map center
     const mapCenter = map.getCenter();
     const distanceFromCenter = gpsFilter.distance(mapCenter.lat, mapCenter.lng, lat, lng);
-    if (distanceFromCenter > 50) { // 50 meters
+    if (distanceFromCenter > 50) {
       map.panTo([lat, lng]);
     }
-    // Always update marker position
     driverMarker.setLatLng([lat, lng]);
   }
 
@@ -913,18 +903,15 @@ document.addEventListener('DOMContentLoaded', () => {
             const rawLng = pos.coords.longitude;
             const accuracy = pos.coords.accuracy || 50;
             const timestamp = pos.timestamp || Date.now();
-            // Process with robust filtering
             const smoothed = gpsFilter.processPosition(rawLat, rawLng, accuracy, timestamp);
-            if (!smoothed) return; // Poor accuracy, skip update
+            if (!smoothed) return;
             driverCoords = {lat: smoothed.lat, lng: smoothed.lng};
-            // Update map with smooth panning
             updateMapSmoothly(smoothed.lat, smoothed.lng);
             updateDriverRotation();
             if(currentJob && routeLine){
               routeLine.setLatLngs([[smoothed.lat, smoothed.lng], [currentJob.lat, currentJob.lng]]);
             }
             publishLocationThrottled();
-            // Update status with GPS indicator
             statusEl.innerHTML = `<span class="gps-source gps-gps"></span>GPS: ${smoothed.lat.toFixed(5)}, ${smoothed.lng.toFixed(5)} | Acc: ${accuracy.toFixed(0)}m`;
           },
           err => {
@@ -1292,7 +1279,7 @@ document.addEventListener('DOMContentLoaded', () => {
     return "#" + "00000".substring(0, 6 - c.length) + c;
   }
 
-  // ===== MQTT =====
+  // ===== MQTT (WITH JOB-WON MODAL) =====
   function connectMQTT(){
     statusEl.innerHTML = `<span class="gps-source gps-poor"></span>Connecting to MQTT as: ${DRIVER_ID}`;
     client = mqtt.connect(MQTT_BROKER, {
@@ -1322,35 +1309,6 @@ document.addEventListener('DOMContentLoaded', () => {
           pickupLocation.textContent = `${data.pubName} (${data.lat.toFixed(5)}, ${data.lng.toFixed(5)})`;
           customerPhone.textContent = data.customerPhone;
           jobPanel.style.display = 'block';
-
-          // === START TIMER INSIDE JOB PANEL ===
-          const timerEl = document.getElementById('jobTimer');
-          const secondsEl = document.getElementById('timerSeconds');
-          timerEl.style.display = 'block';
-          secondsEl.textContent = '30';
-          let secondsLeft = 30;
-          const timerInterval = setInterval(() => {
-            secondsLeft--;
-            secondsEl.textContent = secondsLeft;
-            if (secondsLeft <= 0) {
-              clearInterval(timerInterval);
-              jobPanel.style.display = 'none';
-              currentJob = null;
-              statusEl.innerHTML = '<span class="gps-source gps-poor"></span>⏰ Job expired';
-            }
-          }, 1000);
-
-          // === TEXT-TO-SPEECH ===
-          if ('speechSynthesis' in window) {
-            const utterance = new SpeechSynthesisUtterance(
-              `New job! Pickup at ${data.pubName}. Customer phone: ${data.customerPhone}`
-            );
-            utterance.lang = 'en-GB';
-            utterance.rate = 0.9;
-            speechSynthesis.cancel();
-            speechSynthesis.speak(utterance);
-          }
-
           addJobToHistory(data, 'processing');
         }
         if(topic.startsWith("jobs/") && topic.endsWith(`/result/${DRIVER_ID}`)){
@@ -1358,15 +1316,32 @@ document.addEventListener('DOMContentLoaded', () => {
           if(data.result === "won"){
             statusEl.innerHTML = '<span class="gps-source gps-gps"></span>✅ Job allocated! Pickup: ' + currentJob?.pubName;
             updateJobStatus(jobId, 'allocated');
+
+            // === SHOW JOB-WON MODAL + TTS ===
+            const modal = document.getElementById('jobWonModal');
+            modal.style.display = 'flex';
+
+            if ('speechSynthesis' in window) {
+              const utterance = new SpeechSynthesisUtterance("Driver, you have won the job!");
+              utterance.lang = 'en-GB';
+              utterance.rate = 0.9;
+              speechSynthesis.cancel();
+              speechSynthesis.speak(utterance);
+            }
+
+            document.getElementById('closeJobWonModal').onclick = () => {
+              modal.style.display = 'none';
+            };
           } else if(data.result === "lost"){
             statusEl.innerHTML = '<span class="gps-source gps-network"></span>❌ Bid lost. Better luck next time!';
             updateJobStatus(jobId, 'lost');
           } else if(data.result === "too_late"){
             statusEl.innerHTML = '<span class="gps-source gps-poor"></span>⏰ Bid too late - job expired';
             updateJobStatus(jobId, 'expired');
-          }
-          // ⚠️ REMOVED: "not_allowed" case
-          else if(data.result === "job_timeout"){
+          } else if(data.result === "not_allowed"){
+            statusEl.innerHTML = '<span class="gps-source gps-poor"></span>🚫 Not authorized to bid on this job';
+            updateJobStatus(jobId, 'not_allowed');
+          } else if(data.result === "job_timeout"){
             statusEl.innerHTML = '<span class="gps-source gps-poor"></span>⏰ Job expired - no valid bids received';
             updateJobStatus(jobId, 'expired');
           }
