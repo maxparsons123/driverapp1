@@ -713,7 +713,6 @@ document.addEventListener('DOMContentLoaded', () => {
     );
     connectMQTT();
   }
-  // ... (all your original menu, chat, job history, settings functions from Pasted_Text_1758814480305.txt) ...
   // ===== MENU NAVIGATION =====
   function toggleMenu() {
     isMenuOpen = !isMenuOpen;
@@ -1068,7 +1067,7 @@ document.addEventListener('DOMContentLoaded', () => {
       try{
         const data = JSON.parse(message.toString());
         if(topic.startsWith("pubs/requests/")){
-          // === STORE RECEIVE TIME AND CHECK FOR expiresAt ===
+          // === STORE RECEIVE TIME ===
           currentJob = { ...data, _receivedAt: Date.now() };
           pickupLocation.textContent = `${data.pubName} (${data.lat.toFixed(5)}, ${data.lng.toFixed(5)})`;
           customerPhone.textContent = data.customerPhone;
@@ -1136,7 +1135,6 @@ document.addEventListener('DOMContentLoaded', () => {
             statusEl.innerHTML = '<span class="gps-source gps-poor"></span>⏰ Bid too late - job expired';
             updateJobStatus(jobId, 'expired');
           }
-          // ⚠️ REMOVED: "not_allowed"
           else if(data.result === "job_timeout"){
             statusEl.innerHTML = '<span class="gps-source gps-poor"></span>⏰ Job expired - no valid bids received';
             updateJobStatus(jobId, 'expired');
