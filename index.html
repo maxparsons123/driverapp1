@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Black Cab Unite v1.0.1</title>
+  <title>Black Cab Unite v1.0.2</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
   <style>
@@ -482,7 +482,7 @@
 <body>
   <div id="map"></div>
   <div id="headerBanner">
-    <div id="appTitle">Black Cab Unite v1.0.1</div>
+    <div id="appTitle">Black Cab Unite v1.0.2</div>
     <button id="menuBtn">☰</button>
   </div>
   <div id="status">Initializing...</div>
@@ -639,12 +639,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ===== CLEANUP FUNCTION =====
   function cleanupJobState() {
-    // Stop all TTS
+    // Cancel all TTS
     if ('speechSynthesis' in window) {
       speechSynthesis.cancel();
     }
     // Stop mic
     stopVoiceListener();
+    // Release wake lock
+    releaseWakeLock();
     // Clear timer
     if (currentJobTimer) {
       clearInterval(currentJobTimer);
@@ -703,11 +705,11 @@ document.addEventListener('DOMContentLoaded', () => {
   // ===== WAKE LOCK =====
   async function requestWakeLock() {
     try {
-      if ('wakeLock' in navigator) {
+      if ('wakeLock' in navigator && !wakeLock) {
         wakeLock = await navigator.wakeLock.request('screen');
       }
     } catch (err) {
-      console.warn('Wake Lock failed:', err);
+      console.warn('Wake Lock not available:', err);
     }
   }
   function releaseWakeLock() {
@@ -743,6 +745,7 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
     statusEl.innerHTML = '<span class="gps-source gps-poor"></span>Searching for GPS...';
+    // Initial wake lock for app (optional)
     requestWakeLock();
     gpsWatchId = navigator.geolocation.watchPosition(
       pos => {
@@ -1223,6 +1226,10 @@ document.addEventListener('DOMContentLoaded', () => {
           pickupLocation.textContent = `${data.pubName} (${data.lat.toFixed(5)}, ${data.lng.toFixed(5)})`;
           customerPhone.textContent = data.customerPhone;
           jobPanel.style.display = 'block';
+
+          // ✅ REQUEST WAKE LOCK FOR NEW JOB
+          requestWakeLock();
+
           addJobToHistory(data, 'processing');
 
           // === START 30-SECOND TIMER ===
@@ -1240,7 +1247,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
           }, 1000);
 
-          // === TTS FIRST, THEN MIC ===
+          // === TTS AFTER CLEANUP ===
           if ('speechSynthesis' in window) {
             const utterance = new SpeechSynthesisUtterance(
               `New job! Pickup at ${data.pubName}. Customer phone: ${data.customerPhone}`
@@ -1249,7 +1256,7 @@ document.addEventListener('DOMContentLoaded', () => {
             utterance.rate = 0.9;
             utterance.onend = () => {
               if (jobPanel.style.display === 'block') {
-                startVoiceListener(); // ✅ Mic after TTS
+                startVoiceListener();
               }
             };
             speechSynthesis.speak(utterance);
