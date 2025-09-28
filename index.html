@@ -1,8 +1,8 @@
-save this to a text file and use local for now <!doctype html>
+<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Black Cab Unite v5.1</title>
+  <title>Black Cab Unite</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
   <style>
@@ -158,34 +158,6 @@ save this to a text file and use local for now <!doctype html>
     .reject-btn {
       background: linear-gradient(135deg, #dc3545, #e83e8c);
       color: white;
-    }
-    /* Glowing Mic Indicator */
-    #micIndicator {
-      text-align: center;
-      margin: 16px 0;
-      display: none;
-    }
-    .mic-icon {
-      width: 48px;
-      height: 48px;
-      background: #1f6feb;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: white;
-      font-weight: bold;
-      box-shadow: 0 0 12px #1f6feb;
-      animation: micGlow 1.5s infinite alternate;
-    }
-    @keyframes micGlow {
-      from { box-shadow: 0 0 12px #1f6feb; }
-      to { box-shadow: 0 0 24px #1f6feb, 0 0 32px #1f6feb; }
-    }
-    .mic-label {
-      font-size: 13px;
-      color: #555;
-      margin-top: 8px;
     }
     /* Driver icons */
     .other-driver-icon {
@@ -477,36 +449,29 @@ save this to a text file and use local for now <!doctype html>
       color: #666;
       line-height: 1.5;
     }
-
-    /* ✅ REMOVE WHITE BOX AROUND TAXI MARKER */
-    .taxi-marker {
-      background: transparent !important;
-      border: none !important;
-      box-shadow: none !important;
-    }
   </style>
 </head>
 <body>
   <div id="map"></div>
   <div id="headerBanner">
-    <div id="appTitle">Black Cab Unite v5.1</div>
+    <div id="appTitle">Black Cab Unite</div>
     <button id="menuBtn">☰</button>
   </div>
   <div id="status">Initializing...</div>
-  <div id="jobPanel">
-    <h2>🚕 New Job Request</h2>
-    <div id="jobInfo">
-      <div class="job-info-label">Pickup Location</div>
-      <div class="job-info-value" id="pickupLocation">Loading...</div>
-      <div class="job-info-label" style="margin-top:12px;">Customer Phone</div>
-      <div class="job-info-value" id="customerPhone">Loading...</div>
-      <div id="jobTimer">⏳ Expires in: <span id="timerSeconds">30</span>s</div>
-    </div>
-    <!-- GLOWING MIC INDICATOR -->
-    <div id="micIndicator">
-      <div class="mic-icon">🎤</div>
-      <div class="mic-label">Say “accept” or “reject”</div>
-    </div>
+<div id="jobPanel">
+  <h2>🚕 New Job Request</h2>
+  <div id="jobInfo">
+    <div class="job-info-label">Pickup Location</div>
+    <div class="job-info-value" id="pickupLocation">Loading...</div>
+    <div class="job-info-label" style="margin-top:12px;">Customer Phone</div>
+    <div class="job-info-value" id="customerPhone">Loading...</div>
+    <div id="jobTimer">⏳ Expires in: <span id="timerSeconds">30</span>s</div>
+  </div>
+  <div class="job-actions">
+    <button class="job-btn accept-btn" id="acceptBtn">✅ ACCEPT JOB</button>
+    <button class="job-btn reject-btn" id="rejectBtn">❌ REJECT</button>
+  </div>
+</div>
     <div class="job-actions">
       <button class="job-btn accept-btn" id="acceptBtn">✅ ACCEPT JOB</button>
       <button class="job-btn reject-btn" id="rejectBtn">❌ REJECT</button>
@@ -521,7 +486,7 @@ save this to a text file and use local for now <!doctype html>
       <button class="menu-nav-btn active" data-view="currentJob">📍 Current Job</button>
       <button class="menu-nav-btn" data-view="jobHistory">📋 Job History</button>
       <button class="menu-nav-btn" data-view="chat">💬 Chats</button>
-      <button class="menu-nav-btn" data-view="settings">⚙ Settings</button>
+      <button class="menu-nav-btn" data-view="settings">⚙️ Settings</button>
     </div>
     <div id="menuContent"></div>
   </div>
@@ -591,11 +556,11 @@ document.addEventListener('DOMContentLoaded', () => {
   document.body.addEventListener('touchstart', initTTS, { once: true });
   const MQTT_BROKER = "wss://broker.hivemq.com:8884/mqtt"; 
   const REQUEST_TOPIC = "pubs/requests/+";
-  const LOCATION_TOPIC = drivers/${DRIVER_ID}/location;
+  const LOCATION_TOPIC = `drivers/${DRIVER_ID}/location`;
   const DRIVERS_LOCATION_TOPIC = "drivers/+/location";
   const CHAT_GROUP_TOPIC = "chat/group";
-  const CHAT_PRIVATE_TOPIC = chat/private/${DRIVER_ID}/+;
-  const JOB_RESULT_TOPIC = jobs/+/result/${DRIVER_ID};
+  const CHAT_PRIVATE_TOPIC = `chat/private/${DRIVER_ID}/+`;
+  const JOB_RESULT_TOPIC = `jobs/+/result/${DRIVER_ID}`;
   let driverCoords = null;
   let map = null;
   let driverMarker = null;
@@ -610,12 +575,9 @@ document.addEventListener('DOMContentLoaded', () => {
   let wakeLock = null;
   const otherDrivers = {};
   const driverStatus = {};
-  const chatMessages = { group: JSON.parse(localStorage.getItem(chat_group_${DRIVER_ID})) || [] };
+  const chatMessages = { group: JSON.parse(localStorage.getItem(`chat_group_${DRIVER_ID}`)) || [] };
   const unreadCounts = { group: 0 };
-  let driverJobs = JSON.parse(localStorage.getItem(driver_jobs_${DRIVER_ID})) || [];
-  let pendingJobs = JSON.parse(localStorage.getItem(pending_jobs_${DRIVER_ID})) || [];
-  let maxRadius = parseFloat(localStorage.getItem('max_radius_km') || '10');
-  let isJobActive = false;
+  let driverJobs = JSON.parse(localStorage.getItem(`driver_jobs_${DRIVER_ID}`)) || [];
   const statusEl = document.getElementById('status');
   const jobPanel = document.getElementById('jobPanel');
   const pickupLocation = document.getElementById('pickupLocation');
@@ -624,40 +586,22 @@ document.addEventListener('DOMContentLoaded', () => {
   const menuContent = document.getElementById('menuContent');
   const menuNavBtns = document.querySelectorAll('.menu-nav-btn');
   const loadingOverlay = document.getElementById('loadingOverlay');
-  const micIndicator = document.getElementById('micIndicator');
-
-  // ===== NEW TAXI MARKER WITH "TAXI" TEXT, 58px WIDE, NO WHITE BOX =====
+  // ===== BLACK CAB MARKER =====
   const BLACK_CAB_SVG = `
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 58 36" width="58" height="36">
-  <rect x="4" y="14" width="50" height="14" rx="3" ry="3" fill="#000"/>
-  <path d="M18 14v-4c0-3 2-5 5-5h12c3 0 5 2 5 5v4h-22z" fill="#000"/>
-  <rect x="25" y="4" width="8" height="3" rx="1" fill="#FFD700" stroke="#000" stroke-width="0.5"/>
-  <text x="29" y="6.6" text-anchor="middle" font-size="2.2" font-weight="bold" fill="#000" font-family="Arial, sans-serif">TAXI</text>
-  <rect x="21" y="7" width="6" height="6" rx="1" fill="#fff"/>
-  <rect x="31" y="7" width="6" height="6" rx="1" fill="#fff"/>
-  <circle cx="15" cy="28" r="4" fill="#fff" stroke="#000" stroke-width="1"/>
-  <circle cx="43" cy="28" r="4" fill="#fff" stroke="#000" stroke-width="1"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="36" height="36">
+  <path fill="#000" d="M18 4H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zM6 6h12v2H6V6zm0 10V9h12v7H6z"/>
+  <circle cx="8" cy="14" r="1.5" fill="#fff"/>
+  <circle cx="16" cy="14" r="1.5" fill="#fff"/>
 </svg>
 `;
   function createBlackCabIcon(heading = 0) {
-    const div = document.createElement('div');
-    div.innerHTML = BLACK_CAB_SVG;
-    const svg = div.firstElementChild;
-    svg.style.transform = rotate(${heading}deg);
-    svg.style.transformOrigin = 'center';
+    const svgUrl = 'data:image/svg+xml;base64,' + btoa(BLACK_CAB_SVG);
     return L.divIcon({
-      html: svg.outerHTML,
-      iconSize: [58, 36],
-      iconAnchor: [29, 18],
-      className: 'taxi-marker'
+      html: `<img src="${svgUrl}" style="width:36px; height:36px; transform: rotate(${heading}deg);">`,
+      iconSize: [36, 36],
+      iconAnchor: [18, 18]
     });
   }
-
-  // ===== SAVE PENDING JOBS =====
-  function savePendingJobs() {
-    localStorage.setItem(pending_jobs_${DRIVER_ID}, JSON.stringify(pendingJobs));
-  }
-
   // ===== SIMPLE GPS (STABLE) =====
   function calculateDistance(lat1, lon1, lat2, lon2) {
     const R = 6371000;
@@ -665,7 +609,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const φ2 = (lat2 * Math.PI) / 180;
     const Δφ = ((lat2 - lat1) * Math.PI) / 180;
     const Δλ = ((lon2 - lon1) * Math.PI) / 180;
-    const a = Math.sin(Δφ/2)*2 + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ/2)*2;
+    const a = Math.sin(Δφ/2)**2 + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ/2)**2;
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   }
   function updateDriverMarker(lat, lng, headingValue) {
@@ -774,6 +718,7 @@ document.addEventListener('DOMContentLoaded', () => {
     );
     connectMQTT();
   }
+
   // ===== MENU NAVIGATION =====
   function toggleMenu() {
     isMenuOpen = !isMenuOpen;
@@ -857,7 +802,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   // ===== JOB HISTORY MANAGEMENT =====
   function saveJobs() {
-    localStorage.setItem(driver_jobs_${DRIVER_ID}, JSON.stringify(driverJobs));
+    localStorage.setItem(`driver_jobs_${DRIVER_ID}`, JSON.stringify(driverJobs));
   }
   function addJobToHistory(jobData, initialStatus = 'processing') {
     const job = {
@@ -898,14 +843,10 @@ document.addEventListener('DOMContentLoaded', () => {
     jobsContainer.id = 'jobHistoryContent';
     driverJobs.forEach(job => {
       const jobEl = document.createElement('div');
-      jobEl.className = job-item ${job.status};
+      jobEl.className = `job-item ${job.status}`;
       const date = new Date(job.timestamp);
       const timeStr = date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
       const dateStr = date.toLocaleDateString();
-      let viewButton = '';
-      if (job.status === 'pending') {
-        viewButton = <button class="settings-btn view-pending-btn" data-jobid="${job.job}" style="margin-top:10px; padding:8px; font-size:14px;">View Job Offer</button>;
-      }
       jobEl.innerHTML = `
         <div class="job-id">${job.job}</div>
         <div class="job-pub">Pub: ${job.pubName}</div>
@@ -915,24 +856,10 @@ document.addEventListener('DOMContentLoaded', () => {
           <span class="job-status status-${job.status}">${job.status.toUpperCase()}</span>
           <span style="font-size:12px; color:#666;">${dateStr} ${timeStr}</span>
         </div>
-        ${viewButton}
       `;
       jobsContainer.appendChild(jobEl);
     });
     menuContent.appendChild(jobsContainer);
-
-    // Add click handlers for pending jobs
-    menuContent.querySelectorAll('.view-pending-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const jobId = e.target.dataset.jobid;
-        const job = pendingJobs.find(j => j.job === jobId);
-        if (job && !isJobActive) {
-          showJobPanel(job);
-        } else {
-          alert("Please finish the current job first.");
-        }
-      });
-    });
   }
   // ===== CHAT FUNCTIONS =====
   function renderChatView() {
@@ -945,11 +872,11 @@ document.addEventListener('DOMContentLoaded', () => {
               <div class="contact-name">Group Chat</div>
               <div class="contact-status">All drivers</div>
             </div>
-            ${unreadCounts.group > 0 ? <div class="unread-badge">${unreadCounts.group}</div> : ''}
+            ${unreadCounts.group > 0 ? `<div class="unread-badge">${unreadCounts.group}</div>` : ''}
           </div>
         </div>
-        <div id="chatMessages" style="flex:1; padding:16px; overflow-y:auto; display:flex; flex-direction:column; gap:12px;"></div>
-        <div id="chatInputContainer" style="padding:12px; background:white; border-top:1px solid #eee;">
+        <div id="chatMessages" style="display:none; flex:1; padding:16px; overflow-y:auto; display:flex; flex-direction:column; gap:12px;"></div>
+        <div id="chatInputContainer" style="display:none; padding:12px; background:white; border-top:1px solid #eee;">
           <input type="text" id="chatInput" placeholder="Type a message..." autocomplete="off" style="flex:1; padding:14px; border:2px solid #ddd; border-radius:24px; font-size:16px;">
           <button id="sendBtn" style="background:#000; color:#FFD700; border:none; width:52px; height:52px; border-radius:50%; margin-left:12px; cursor:pointer; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:20px; box-shadow:0 2px 8px rgba(0,0,0,0.2);">➤</button>
         </div>
@@ -984,7 +911,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const messages = chatMessages[currentChat] || [];
     messages.forEach(msg => {
       const messageEl = document.createElement('div');
-      messageEl.className = message ${msg.sender === DRIVER_ID ? 'sent' : 'received'};
+      messageEl.className = `message ${msg.sender === DRIVER_ID ? 'sent' : 'received'}`;
       messageEl.innerHTML = `
         ${msg.text}
         <div class="message-info">
@@ -1005,7 +932,7 @@ document.addEventListener('DOMContentLoaded', () => {
           <div class="contact-name">Group Chat</div>
           <div class="contact-status">All drivers</div>
         </div>
-        ${unreadCounts.group > 0 ? <div class="unread-badge">${unreadCounts.group}</div> : ''}
+        ${unreadCounts.group > 0 ? `<div class="unread-badge">${unreadCounts.group}</div>` : ''}
       </div>
     `;
     Object.keys(otherDrivers).forEach(driverId => {
@@ -1021,7 +948,7 @@ document.addEventListener('DOMContentLoaded', () => {
           <div class="contact-name">${driverId}</div>
           <div class="contact-status">${isOnline ? 'Online' : 'Offline'}</div>
         </div>
-        ${unread > 0 ? <div class="unread-badge">${unread}</div> : ''}
+        ${unread > 0 ? `<div class="unread-badge">${unread}</div>` : ''}
       `;
       chatList.appendChild(contactEl);
     });
@@ -1035,7 +962,7 @@ document.addEventListener('DOMContentLoaded', () => {
       client.publish(CHAT_GROUP_TOPIC, JSON.stringify(payload));
     } else {
       const payload = { sender: DRIVER_ID, text, timestamp: Date.now() };
-      client.publish(chat/private/${currentChat}/${DRIVER_ID}, JSON.stringify(payload));
+      client.publish(`chat/private/${currentChat}/${DRIVER_ID}`, JSON.stringify(payload));
     }
     addMessage(currentChat, DRIVER_ID, text);
     chatInput.value = '';
@@ -1060,9 +987,9 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   function saveChatMessages() {
     if (currentChat) {
-      localStorage.setItem(chat_${currentChat}_${DRIVER_ID}, JSON.stringify(chatMessages[currentChat] || []));
+      localStorage.setItem(`chat_${currentChat}_${DRIVER_ID}`, JSON.stringify(chatMessages[currentChat] || []));
     }
-    localStorage.setItem(chat_group_${DRIVER_ID}, JSON.stringify(chatMessages.group || []));
+    localStorage.setItem(`chat_group_${DRIVER_ID}`, JSON.stringify(chatMessages.group || []));
   }
   // ===== SETTINGS VIEW =====
   function renderSettingsView() {
@@ -1074,11 +1001,6 @@ document.addEventListener('DOMContentLoaded', () => {
         <div class="settings-info">
           Your current ID: <span id="currentDriverId">${DRIVER_ID}</span>
         </div>
-      </div>
-      <div class="settings-group">
-        <div class="settings-label">Max Job Radius (km)</div>
-        <input type="number" id="maxRadiusInput" class="settings-input" value="${maxRadius}" min="1" max="50" step="1">
-        <button class="settings-btn" id="saveRadiusBtn">Save Radius</button>
       </div>
       <div class="settings-group">
         <div class="settings-label">Clear Job History</div>
@@ -1102,25 +1024,12 @@ document.addEventListener('DOMContentLoaded', () => {
         client.end();
         setTimeout(() => connectMQTT(), 1000);
       }
-      statusEl.innerHTML = <span class="gps-source gps-gps"></span>✅ Driver ID updated to: ${newId};
-    });
-    document.getElementById('saveRadiusBtn').addEventListener('click', () => {
-      const val = document.getElementById('maxRadiusInput').value;
-      const radius = parseFloat(val);
-      if (isNaN(radius) || radius < 1 || radius > 50) {
-        alert("Please enter a radius between 1 and 50 km");
-        return;
-      }
-      maxRadius = radius;
-      localStorage.setItem('max_radius_km', radius.toString());
-      statusEl.innerHTML = ✅ Max radius set to ${radius} km;
+      statusEl.innerHTML = `<span class="gps-source gps-gps"></span>✅ Driver ID updated to: ${newId}`;
     });
     document.getElementById('clearJobsBtn').addEventListener('click', () => {
       if (confirm("Are you sure you want to clear all job history?")) {
         driverJobs = [];
-        pendingJobs = [];
         saveJobs();
-        savePendingJobs();
         if (isMenuOpen && currentView === 'jobHistory') renderJobHistory();
         if (isMenuOpen && currentView === 'currentJob') renderCurrentJob();
         statusEl.innerHTML = '<span class="gps-source gps-network"></span>✅ Job history cleared';
@@ -1130,7 +1039,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // ===== MARK JOB COMPLETED =====
   window.markJobCompleted = function(jobId) {
     const payload = { job: jobId, driver: DRIVER_ID, status: "completed", ts: Date.now() };
-    client.publish(jobs/${jobId}/status, JSON.stringify(payload));
+    client.publish(`jobs/${jobId}/status`, JSON.stringify(payload));
     updateJobStatus(jobId, 'completed');
     statusEl.innerHTML = '<span class="gps-source gps-gps"></span>✅ Job marked as completed';
   };
@@ -1143,232 +1052,181 @@ document.addEventListener('DOMContentLoaded', () => {
     const c = (hash & 0x00FFFFFF).toString(16).toUpperCase();
     return "#" + "00000".substring(0, 6 - c.length) + c;
   }
-  // ===== VOICE LISTENER WITH MIC INDICATOR =====
-  let speechRecognition = null;
-  let retryCount = 0;
-  const MAX_RETRIES = 5;
-  function showMicIndicator() {
-    micIndicator.style.display = 'block';
-  }
-  function hideMicIndicator() {
-    micIndicator.style.display = 'none';
-  }
-  function startVoiceListener() {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      console.warn("SpeechRecognition not supported");
-      return;
-    }
-    retryCount = 0;
-    speechRecognition = new SpeechRecognition();
-    speechRecognition.lang = 'en-US';
-    speechRecognition.continuous = false;
-    speechRecognition.interimResults = false;
-    speechRecognition.onstart = () => {
-      showMicIndicator();
-    };
-    speechRecognition.onresult = (event) => {
-      const transcript = event.results[0][0].transcript.toLowerCase().trim();
-      if (/\baccept\b/.test(transcript) && !/\breject\b/.test(transcript)) {
-        respondToJob(true);
-        speakFeedback("Job accepted. Thank you.");
-      } else if (/\breject\b/.test(transcript)) {
-        respondToJob(false);
-        speakFeedback("Job rejected. Understood.");
+
+  // ===== JOB VOICE LISTENER =====
+  class JobVoiceListener {
+    constructor({ lang = "en-US", timeoutMs = 0, onResponse = () => {} } = {}) {
+      this.lang = lang;
+      this.timeoutMs = timeoutMs;
+      this.onResponse = onResponse;
+      this.recognition = null;
+      this.isActive = false;
+      this.timeoutHandle = null;
+
+      const SpeechRecognition =
+        window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) {
+        console.warn("SpeechRecognition not supported in this browser.");
+        return;
       }
-    };
-    speechRecognition.onerror = (e) => {
-      if (e.error !== 'aborted') {
-        console.error("Voice error:", e.error);
-        retryCount++;
-        if (retryCount > MAX_RETRIES) {
-          speechRecognition = null;
+
+      this.SpeechRecognition = SpeechRecognition;
+    }
+
+    start() {
+      if (!this.SpeechRecognition || this.isActive) return;
+
+      this.recognition = new this.SpeechRecognition();
+      this.recognition.lang = this.lang;
+      this.recognition.continuous = false;
+      this.recognition.interimResults = false;
+
+      this.recognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript.toLowerCase().trim();
+        if (transcript.includes("accept") && !transcript.includes("reject")) {
+          this.speak("Job accepted. Thank you.");
+          this.onResponse(true);
+          this.stop();
+        } else if (transcript.includes("reject")) {
+          this.speak("Job rejected. Understood.");
+          this.onResponse(false);
+          this.stop();
+        } else {
+          this.restart();
         }
+      };
+
+      this.recognition.onerror = (err) => {
+        if (err.error !== 'aborted') this.restart();
+      };
+
+      this.recognition.onend = () => {
+        if (this.isActive) this.restart();
+      };
+
+      this.isActive = true;
+      this.recognition.start();
+
+      if (this.timeoutMs > 0) {
+        this.timeoutHandle = setTimeout(() => {
+          this.stop();
+        }, this.timeoutMs);
       }
-    };
-    speechRecognition.onend = () => {
-      hideMicIndicator();
-      if (jobPanel.style.display === 'block' && retryCount <= MAX_RETRIES) {
-        setTimeout(() => {
-          if (jobPanel.style.display === 'block') {
-            startVoiceListener();
-          }
-        }, 500);
-      } else {
-        speechRecognition = null;
-      }
-    };
-    try {
-      speechRecognition.start();
-    } catch (err) {
-      console.error("Failed to start SpeechRecognition:", err);
-      speechRecognition = null;
     }
-  }
-  function stopVoiceListener() {
-    hideMicIndicator();
-    if (speechRecognition) {
-      speechRecognition.abort();
-      speechRecognition = null;
+
+    restart() {
+      if (!this.isActive) return;
+      setTimeout(() => {
+        try {
+          this.recognition.start();
+        } catch (e) {
+          console.error("Restart failed:", e);
+        }
+      }, 800);
     }
-  }
-  function speakFeedback(message) {
-    if (!('speechSynthesis' in window)) return;
-    const utterance = new SpeechSynthesisUtterance(message);
-    utterance.lang = 'en-GB';
-    utterance.rate = 0.9;
-    if (speechRecognition) speechRecognition.abort();
-    utterance.onend = () => {
-      if (jobPanel.style.display === 'block') {
-        startVoiceListener();
+
+    stop() {
+      this.isActive = false;
+      clearTimeout(this.timeoutHandle);
+      if (this.recognition) {
+        try { this.recognition.stop(); } catch (e) {}
       }
-    };
-    speechSynthesis.cancel();
-    speechSynthesis.speak(utterance);
-  }
-  // ===== JOB QUEUE LOGIC =====
-  function processPendingJobs() {
-    if (isJobActive || pendingJobs.length === 0) return;
-    const now = Date.now();
-    pendingJobs = pendingJobs.filter(job => (now - job.receivedAt) < 30000);
-    savePendingJobs();
-    if (pendingJobs.length === 0) return;
-    const job = pendingJobs.shift();
-    savePendingJobs();
-    showJobPanel(job);
-  }
+    }
 
-  function showJobPanel(job) {
-    isJobActive = true;
-    currentJob = job;
-    pickupLocation.textContent = ${job.pubName} (${job.lat.toFixed(5)}, ${job.lng.toFixed(5)});
-    customerPhone.textContent = job.customerPhone;
-    jobPanel.style.display = 'block';
-
-    let secondsLeft = 30;
-    const timerInterval = setInterval(() => {
-      secondsLeft--;
-      document.getElementById('timerSeconds').textContent = secondsLeft;
-      if (secondsLeft <= 0) {
-        clearInterval(timerInterval);
-        cleanupJob();
-        processPendingJobs();
-      }
-    }, 1000);
-
-    if ('speechSynthesis' in window) {
-      const u = new SpeechSynthesisUtterance(New job! Pickup at ${job.pubName}. Customer phone: ${job.customerPhone});
-      u.lang = 'en-GB'; u.rate = 0.9;
-      u.onend = () => startVoiceListener();
-      speechSynthesis.speak(u);
-    } else {
-      startVoiceListener();
+    speak(message) {
+      if (!("speechSynthesis" in window)) return;
+      const utterance = new SpeechSynthesisUtterance(message);
+      utterance.lang = "en-GB";
+      utterance.rate = 0.9;
+      speechSynthesis.cancel();
+      speechSynthesis.speak(utterance);
     }
   }
 
-  function cleanupJob() {
-    jobPanel.style.display = 'none';
-    stopVoiceListener();
-    currentJob = null;
-    isJobActive = false;
-    if (pickupMarker) { map.removeLayer(pickupMarker); pickupMarker = null; }
-    if (routeLine) { map.removeLayer(routeLine); routeLine = null; }
+  const jobVoiceListener = new JobVoiceListener({
+    timeoutMs: 0,
+    onResponse: (accepted) => {
+      respondToJob(accepted);
+    }
+  });
+
+  function startJobVoiceListener() {
+    jobVoiceListener.start();
   }
 
-  function respondToJob(accepted){
-    if(!currentJob || !client) return;
-    const job = currentJob;
-
-    // Remove from pending
-    pendingJobs = pendingJobs.filter(j => j.job !== job.job);
-    savePendingJobs();
-
-    if(accepted){
-      let bidLat = driverCoords?.lat || job.lat;
-      let bidLng = driverCoords?.lng || job.lng;
-      const payload = { driver: DRIVER_ID, lat: bidLat, lng: bidLng };
-      client.publish(jobs/${job.job}/accept, JSON.stringify(payload));
-      statusEl.innerHTML = '✅ Bid sent';
-      updateJobStatus(job.job, 'bidding');
-    } else {
-      const payload = { job: job.job, driver: DRIVER_ID, status: "rejected", ts:Date.now() };
-      client.publish(jobs/${job.job}/status, JSON.stringify(payload));
-      statusEl.innerHTML = '❌ Job rejected';
-      updateJobStatus(job.job, 'rejected');
-    }
-    cleanupJob();
-    processPendingJobs();
+  function stopJobVoiceListener() {
+    jobVoiceListener.stop();
   }
 
   // ===== MQTT =====
   function connectMQTT(){
-    statusEl.innerHTML = <span class="gps-source gps-poor"></span>Connecting to MQTT as: ${DRIVER_ID};
+    statusEl.innerHTML = `<span class="gps-source gps-poor"></span>Connecting to MQTT as: ${DRIVER_ID}`;
     client = mqtt.connect(MQTT_BROKER, {
       clientId: 'driver-' + DRIVER_ID + '-' + Math.random().toString(16).substr(2,8),
       clean: true,
       reconnectPeriod: 1000
     });
     client.on('connect', ()=>{ 
-      statusEl.innerHTML = <span class="gps-source gps-gps"></span>Connected as: ${DRIVER_ID};
+      statusEl.innerHTML = `<span class="gps-source gps-gps"></span>Connected as: ${DRIVER_ID}`;
       client.subscribe(REQUEST_TOPIC);
       client.subscribe(DRIVERS_LOCATION_TOPIC);
       client.subscribe(CHAT_GROUP_TOPIC);
       client.subscribe(CHAT_PRIVATE_TOPIC);
       client.subscribe(JOB_RESULT_TOPIC);
       setInterval(cleanupOldDrivers, 30000);
-      // Auto-clean expired pending jobs
-      setInterval(() => {
-        const now = Date.now();
-        let changed = false;
-        pendingJobs = pendingJobs.filter(job => {
-          if (now - job.receivedAt >= 30000) {
-            updateJobStatus(job.job, 'expired');
-            changed = true;
-            return false;
-          }
-          return true;
-        });
-        if (changed) savePendingJobs();
-      }, 10000);
     });
     client.on('message', (topic, message)=>{ 
       try{
         const data = JSON.parse(message.toString());
         if(topic.startsWith("pubs/requests/")){
-          // Radius filter
-          if (driverCoords) {
-            const dist = calculateDistance(driverCoords.lat, driverCoords.lng, data.lat, data.lng);
-            if (dist > maxRadius * 1000) {
-              client.publish(jobs/${data.job}/status, JSON.stringify({
-                job: data.job,
-                driver: DRIVER_ID,
-                status: "rejected",
-                reason: "out_of_radius",
-                ts: Date.now()
-              }));
-              addJobToHistory(data, 'rejected');
-              return;
+          currentJob = data;
+          pickupLocation.textContent = `${data.pubName} (${data.lat.toFixed(5)}, ${data.lng.toFixed(5)})`;
+          customerPhone.textContent = data.customerPhone;
+          jobPanel.style.display = 'block';
+         
+     
+          addJobToHistory(data, 'processing');
+          // === START 30-SECOND TIMER ===
+          const timerEl = document.getElementById('jobTimer');
+          const secondsEl = document.getElementById('timerSeconds');
+          timerEl.style.display = 'block';
+          secondsEl.textContent = '30';
+          let secondsLeft = 30;
+          const timerInterval = setInterval(() => {
+            secondsLeft--;
+            secondsEl.textContent = secondsLeft;
+            if (secondsLeft <= 0) {
+              clearInterval(timerInterval);
+              jobPanel.style.display = 'none';
+              stopJobVoiceListener(); // 👈 STOP VOICE
+              currentJob = null;
+              statusEl.innerHTML = '<span class="gps-source gps-poor"></span>⏰ Job expired';
             }
+          }, 1000);
+          // === TTS FOR JOB OFFER ===
+          if ('speechSynthesis' in window) {
+            const utterance = new SpeechSynthesisUtterance(
+              `New job! Pickup at ${data.pubName}. Customer phone: ${data.customerPhone}`
+            );
+            utterance.lang = 'en-GB';
+            utterance.rate = 0.9;
+            speechSynthesis.cancel();
+            speechSynthesis.speak(utterance);
           }
-
-          // Add to pending
-          pendingJobs.push({ ...data, receivedAt: Date.now() });
-          savePendingJobs();
-          addJobToHistory(data, 'pending');
-
-          // Auto-process after short delay
-          setTimeout(processPendingJobs, 500);
         }
-        if(topic.startsWith("jobs/") && topic.endsWith(/result/${DRIVER_ID})){
+        if(topic.startsWith("jobs/") && topic.endsWith(`/result/${DRIVER_ID}`)){
           const jobId = topic.split('/')[1];
           if(data.result === "won"){
-            statusEl.innerHTML = '<span class="gps-source gps-gps"></span>✅ Job allocated! Pickup: ' + (currentJob?.pubName || 'unknown');
+            statusEl.innerHTML = '<span class="gps-source gps-gps"></span>✅ Job allocated! Pickup: ' + currentJob?.pubName;
             updateJobStatus(jobId, 'allocated');
+            // === SHOW JOB-WON MODAL + TTS ===
             const modal = document.getElementById('jobWonModal');
             modal.style.display = 'flex';
             if ('speechSynthesis' in window) {
-              const utterance = new SpeechSynthesisUtterance("You won the job!");
+              const utterance = new SpeechSynthesisUtterance("Driver, you have won the job!");
               utterance.lang = 'en-GB';
+              utterance.rate = 0.9;
+              speechSynthesis.cancel();
               speechSynthesis.speak(utterance);
             }
             document.getElementById('closeJobWonModal').onclick = () => {
@@ -1381,6 +1239,7 @@ document.addEventListener('DOMContentLoaded', () => {
             statusEl.innerHTML = '<span class="gps-source gps-poor"></span>⏰ Bid too late - job expired';
             updateJobStatus(jobId, 'expired');
           }
+          // ⚠️ REMOVED: "not_allowed"
           else if(data.result === "job_timeout"){
             statusEl.innerHTML = '<span class="gps-source gps-poor"></span>⏰ Job expired - no valid bids received';
             updateJobStatus(jobId, 'expired');
@@ -1392,7 +1251,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const validStatuses = ['allocated', 'completed', 'lost', 'rejected', 'no_drivers_responded', 'no_acceptance', 'no_valid_acceptance'];
             if (validStatuses.includes(data.status)) {
               if(data.status === "allocated"){
-                statusEl.innerHTML = '<span class="gps-source gps-gps"></span>✅ Job allocated! Pickup: ' + (currentJob?.pubName || 'unknown');
+                statusEl.innerHTML = '<span class="gps-source gps-gps"></span>✅ Job allocated! Pickup: ' + currentJob?.pubName;
                 updateJobStatus(jobId, 'allocated');
               } else if(data.status === "lost"){
                 statusEl.innerHTML = '<span class="gps-source gps-network"></span>❌ Bid lost. Better luck next time!';
@@ -1415,7 +1274,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if(topic === CHAT_GROUP_TOPIC) {
           addMessage('group', data.sender, data.text, data.timestamp);
         }
-        if(topic.startsWith(chat/private/${DRIVER_ID}/)) {
+        if(topic.startsWith(`chat/private/${DRIVER_ID}/`)) {
           const senderId = topic.split('/')[3];
           addMessage(senderId, senderId, data.text, data.timestamp);
         }
@@ -1424,6 +1283,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   }
+
   function updateOtherDriverMarker(driverId, lat, lng, data) {
     const now = Date.now();
     if (!otherDrivers[driverId]) {
@@ -1431,7 +1291,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const marker = L.marker([lat, lng], {
         icon: L.divIcon({
           className: 'other-driver-icon',
-          html: <div class="other-driver-icon" style="background:${color}">${driverId.substring(0,2).toUpperCase()}</div>,
+          html: `<div class="other-driver-icon" style="background:${color}">${driverId.substring(0,2).toUpperCase()}</div>`,
           iconSize: [32, 32],
           iconAnchor: [16, 16]
         }),
@@ -1464,6 +1324,28 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     if (isMenuOpen && currentView === 'chat') updateChatList();
   }
+  // ===== JOB RESPONSE =====
+  function respondToJob(accepted){
+    if(!currentJob || !client) return;
+    if(accepted){
+      let bidLat = driverCoords?.lat || currentJob.lat;
+      let bidLng = driverCoords?.lng || currentJob.lng;
+      const payload = { driver: DRIVER_ID, lat: bidLat, lng: bidLng };
+      client.publish(`jobs/${currentJob.job}/accept`, JSON.stringify(payload));
+      statusEl.innerHTML = '<span class="gps-source gps-gps"></span>✅ Bid sent for job ' + currentJob.job;
+      updateJobStatus(currentJob.job, 'bidding');
+    } else {
+      const payload = { job: currentJob.job, driver: DRIVER_ID, status: "rejected", ts:Date.now() };
+      client.publish(`jobs/${currentJob.job}/status`, JSON.stringify(payload));
+      statusEl.innerHTML = '<span class="gps-source gps-network"></span>❌ Job rejected';
+      updateJobStatus(currentJob.job, 'rejected');
+    }
+    jobPanel.style.display = 'none';
+    stopJobVoiceListener(); // 👈 STOP VOICE
+    if(pickupMarker){ map.removeLayer(pickupMarker); pickupMarker = null; }
+    if(routeLine){ map.removeLayer(routeLine); routeLine = null; }
+    currentJob = null;
+  }
   // ===== EVENT LISTENERS =====
   document.getElementById('acceptBtn').addEventListener('click', () => respondToJob(true));
   document.getElementById('rejectBtn').addEventListener('click', () => respondToJob(false));
@@ -1472,13 +1354,7 @@ document.addEventListener('DOMContentLoaded', () => {
     btn.addEventListener('click', () => switchView(btn.dataset.view));
   });
   document.addEventListener('click', (e) => {
-    // Keep menu open if clicking inside chat or input
-    if (isMenuOpen && 
-        !menuPanel.contains(e.target) && 
-        e.target !== document.getElementById('menuBtn') &&
-        !e.target.closest('#chatMessages') &&
-        !e.target.closest('#chatInputContainer')
-    ) {
+    if (isMenuOpen && !menuPanel.contains(e.target) && e.target !== document.getElementById('menuBtn')) {
       isMenuOpen = false;
       menuPanel.classList.remove('active');
     }
@@ -1487,6 +1363,69 @@ document.addEventListener('DOMContentLoaded', () => {
     if (gpsWatchId) navigator.geolocation.clearWatch(gpsWatchId);
     releaseWakeLock();
   });
+
+let speechRecognition = null;
+
+function startVoiceListener() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    console.warn("SpeechRecognition not supported");
+    return;
+  }
+
+  speechRecognition = new SpeechRecognition();
+  speechRecognition.lang = 'en-US';
+  speechRecognition.continuous = false;
+  speechRecognition.interimResults = false;
+
+  speechRecognition.onresult = (event) => {
+    const transcript = event.results[0][0].transcript.toLowerCase().trim();
+    if (transcript.includes('accept') && !transcript.includes('reject')) {
+      respondToJob(true);
+      if ('speechSynthesis' in window) {
+        const utterance = new SpeechSynthesisUtterance("Job accepted. Thank you.");
+        utterance.lang = 'en-GB';
+        utterance.rate = 0.9;
+        speechSynthesis.cancel();
+        speechSynthesis.speak(utterance);
+      }
+    } else if (transcript.includes('reject')) {
+      respondToJob(false);
+      if ('speechSynthesis' in window) {
+        const utterance = new SpeechSynthesisUtterance("Job rejected. Understood.");
+        utterance.lang = 'en-GB';
+        utterance.rate = 0.9;
+        speechSynthesis.cancel();
+        speechSynthesis.speak(utterance);
+      }
+    }
+  };
+
+  speechRecognition.onerror = (e) => {
+    if (e.error !== 'aborted') console.error("Voice error:", e.error);
+  };
+
+  speechRecognition.onend = () => {
+    // Auto-restart only if job is still active
+    if (jobPanel.style.display === 'block') {
+      setTimeout(() => {
+        if (jobPanel.style.display === 'block') {
+          startVoiceListener();
+        }
+      }, 500);
+    }
+  };
+
+  // This will trigger mic permission prompt
+  speechRecognition.start();
+}
+
+function stopVoiceListener() {
+  if (speechRecognition) {
+    speechRecognition.stop();
+    speechRecognition = null;
+  }
+}
   initMapImmediately();
   renderCurrentJob();
 });
