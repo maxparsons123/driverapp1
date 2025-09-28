@@ -625,11 +625,24 @@ document.addEventListener('DOMContentLoaded', () => {
   const MAX_RETRIES = 5;
 
   // ===== BLACK CAB MARKER =====
-  const BLACK_CAB_SVG = `
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="36" height="36">
-  <path fill="#000" d="M18 4H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zM6 6h12v2H6V6zm0 10V9h12v7H6z"/>
-  <circle cx="8" cy="14" r="1.5" fill="#fff"/>
-  <circle cx="16" cy="14" r="1.5" fill="#fff"/>
+const BLACK_CAB_SVG = `
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 36" width="64" height="36">
+  <!-- Car body -->
+  <rect x="4" y="14" width="56" height="14" rx="3" ry="3" fill="#000"/>
+  
+  <!-- Cab roof -->
+  <path d="M20 14v-4c0-3 2-5 5-5h14c3 0 5 2 5 5v4h-24z" fill="#000"/>
+  
+  <!-- Taxi light (yellow) -->
+  <rect x="28" y="4" width="8" height="3" rx="1" fill="#FFD700" stroke="#000" stroke-width="0.5"/>
+  
+  <!-- Windows -->
+  <rect x="23" y="7" width="7" height="6" rx="1" fill="#fff"/>
+  <rect x="34" y="7" width="7" height="6" rx="1" fill="#fff"/>
+  
+  <!-- Wheels -->
+  <circle cx="16" cy="28" r="4" fill="#fff" stroke="#000" stroke-width="1"/>
+  <circle cx="48" cy="28" r="4" fill="#fff" stroke="#000" stroke-width="1"/>
 </svg>
 `;
   function createBlackCabIcon(heading = 0) {
