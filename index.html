@@ -2,12 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Black Cab Unite v1.0.4</title>
+  <title>Black Cab Unite v5</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <!-- ✅ Prevent caching -->
-  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-  <meta http-equiv="Pragma" content="no-cache">
-  <meta http-equiv="Expires" content="0">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
   <style>
     body { 
@@ -481,19 +477,12 @@
       color: #666;
       line-height: 1.5;
     }
-
-    /* ✅ REMOVE WHITE BOX AROUND TAXI MARKER */
-    .taxi-marker {
-      background: transparent !important;
-      border: none !important;
-      box-shadow: none !important;
-    }
   </style>
 </head>
 <body>
   <div id="map"></div>
   <div id="headerBanner">
-    <div id="appTitle">Black Cab Unite v1.0.4</div>
+    <div id="appTitle">Black Cab Unite v5</div>
     <button id="menuBtn">☰</button>
   </div>
   <div id="status">Initializing...</div>
@@ -617,6 +606,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const chatMessages = { group: JSON.parse(localStorage.getItem(`chat_group_${DRIVER_ID}`)) || [] };
   const unreadCounts = { group: 0 };
   let driverJobs = JSON.parse(localStorage.getItem(`driver_jobs_${DRIVER_ID}`)) || [];
+  let pendingJobs = JSON.parse(localStorage.getItem(`pending_jobs_${DRIVER_ID}`)) || [];
   const statusEl = document.getElementById('status');
   const jobPanel = document.getElementById('jobPanel');
   const pickupLocation = document.getElementById('pickupLocation');
@@ -626,60 +616,28 @@ document.addEventListener('DOMContentLoaded', () => {
   const menuNavBtns = document.querySelectorAll('.menu-nav-btn');
   const loadingOverlay = document.getElementById('loadingOverlay');
   const micIndicator = document.getElementById('micIndicator');
+  let maxRadius = parseFloat(localStorage.getItem('max_radius_km') || '10');
 
-  // ===== NEW TAXI MARKER (58px wide, with "TAXI" text, no white box) =====
+  // ===== BLACK CAB MARKER =====
   const BLACK_CAB_SVG = `
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 58 36" width="58" height="36">
-  <!-- Car body -->
-  <rect x="4" y="14" width="50" height="14" rx="3" ry="3" fill="#000"/>
-  <!-- Cab roof -->
-  <path d="M18 14v-4c0-3 2-5 5-5h12c3 0 5 2 5 5v4h-22z" fill="#000"/>
-  <!-- Taxi light (yellow) -->
-  <rect x="25" y="4" width="8" height="3" rx="1" fill="#FFD700" stroke="#000" stroke-width="0.5"/>
-  <!-- Taxi light text -->
-  <text x="29" y="6.6" text-anchor="middle" font-size="2.2" font-weight="bold" fill="#000" font-family="Arial, sans-serif">
-    TAXI
-  </text>
-  <!-- Windows -->
-  <rect x="21" y="7" width="6" height="6" rx="1" fill="#fff"/>
-  <rect x="31" y="7" width="6" height="6" rx="1" fill="#fff"/>
-  <!-- Wheels -->
-  <circle cx="15" cy="28" r="4" fill="#fff" stroke="#000" stroke-width="1"/>
-  <circle cx="43" cy="28" r="4" fill="#fff" stroke="#000" stroke-width="1"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="36" height="36">
+  <path fill="#000" d="M18 4H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zM6 6h12v2H6V6zm0 10V9h12v7H6z"/>
+  <circle cx="8" cy="14" r="1.5" fill="#fff"/>
+  <circle cx="16" cy="14" r="1.5" fill="#fff"/>
 </svg>
 `;
   function createBlackCabIcon(heading = 0) {
-    const div = document.createElement('div');
-    div.innerHTML = BLACK_CAB_SVG;
-    const svg = div.firstElementChild;
-    svg.style.transform = `rotate(${heading}deg)`;
-    svg.style.transformOrigin = 'center';
+    const svgUrl = 'data:image/svg+xml;base64,' + btoa(BLACK_CAB_SVG);
     return L.divIcon({
-      html: svg.outerHTML,
-      iconSize: [58, 36],
-      iconAnchor: [29, 18],
-      className: 'taxi-marker' // ✅ Removes white background
+      html: `<img src="${svgUrl}" style="width:36px; height:36px; transform: rotate(${heading}deg);">`,
+      iconSize: [36, 36],
+      iconAnchor: [18, 18]
     });
   }
 
-  // ===== FUZZY LOGIC FOR SPEECH DETECTION =====
-  function detectJobResponse(transcript) {
-    const text = transcript.toLowerCase().trim();
-    const acceptKeywords = [
-      'accept', 'yes', 'yeah', 'yep', 'sure', 'okay', 'ok', 'take it', 
-      'i want', 'i will', 'i can', 'lets go', 'let me', 'sounds good',
-      'i accept', 'can i accept', 'will accept', 'take that', 'take the job',
-      'go for it', 'do it', 'lets do it', 'i am in', 'count me in'
-    ];
-    const rejectKeywords = [
-      'reject', 'no', 'nope', 'pass', 'skip', 'dont want', 'do not want',
-      'not interested', 'cant do', 'cannot do', 'too far', 'busy',
-      'i reject', 'reject that', 'reject the job', 'not taking',
-      'not today', 'maybe later', 'not now', 'decline', 'refuse'
-    ];
-    for (const kw of acceptKeywords) if (text.includes(kw)) return 'accept';
-    for (const kw of rejectKeywords) if (text.includes(kw)) return 'reject';
-    return 'unknown';
+  // ===== SAVE PENDING JOBS =====
+  function savePendingJobs() {
+    localStorage.setItem(`pending_jobs_${DRIVER_ID}`, JSON.stringify(pendingJobs));
   }
 
   // ===== SIMPLE GPS (STABLE) =====
@@ -926,6 +884,10 @@ document.addEventListener('DOMContentLoaded', () => {
       const date = new Date(job.timestamp);
       const timeStr = date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
       const dateStr = date.toLocaleDateString();
+      let viewButton = '';
+      if (job.status === 'pending') {
+        viewButton = `<button class="settings-btn view-pending-btn" data-jobid="${job.job}" style="margin-top:10px; padding:8px; font-size:14px;">View Job Offer</button>`;
+      }
       jobEl.innerHTML = `
         <div class="job-id">${job.job}</div>
         <div class="job-pub">Pub: ${job.pubName}</div>
@@ -935,10 +897,24 @@ document.addEventListener('DOMContentLoaded', () => {
           <span class="job-status status-${job.status}">${job.status.toUpperCase()}</span>
           <span style="font-size:12px; color:#666;">${dateStr} ${timeStr}</span>
         </div>
+        ${viewButton}
       `;
       jobsContainer.appendChild(jobEl);
     });
     menuContent.appendChild(jobsContainer);
+
+    // Add click handlers for pending jobs
+    menuContent.querySelectorAll('.view-pending-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const jobId = e.target.dataset.jobid;
+        const job = pendingJobs.find(j => j.job === jobId);
+        if (job && !currentJob && jobPanel.style.display !== 'block') {
+          openJobOfferModal(job);
+        } else {
+          alert("Please finish the current job first.");
+        }
+      });
+    });
   }
   // ===== CHAT FUNCTIONS =====
   function renderChatView() {
@@ -1082,6 +1058,11 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>
       </div>
       <div class="settings-group">
+        <div class="settings-label">Max Job Radius (km)</div>
+        <input type="number" id="maxRadiusInput" class="settings-input" value="${maxRadius}" min="1" max="50" step="1">
+        <button class="settings-btn" id="saveRadiusBtn">Save Radius</button>
+      </div>
+      <div class="settings-group">
         <div class="settings-label">Clear Job History</div>
         <button class="settings-btn" id="clearJobsBtn" style="background:#dc3545;">Clear All Jobs</button>
       </div>
@@ -1105,10 +1086,23 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       statusEl.innerHTML = `<span class="gps-source gps-gps"></span>✅ Driver ID updated to: ${newId}`;
     });
+    document.getElementById('saveRadiusBtn').addEventListener('click', () => {
+      const val = document.getElementById('maxRadiusInput').value;
+      const radius = parseFloat(val);
+      if (isNaN(radius) || radius < 1 || radius > 50) {
+        alert("Please enter a radius between 1 and 50 km");
+        return;
+      }
+      maxRadius = radius;
+      localStorage.setItem('max_radius_km', radius.toString());
+      statusEl.innerHTML = `✅ Max radius set to ${radius} km`;
+    });
     document.getElementById('clearJobsBtn').addEventListener('click', () => {
       if (confirm("Are you sure you want to clear all job history?")) {
         driverJobs = [];
+        pendingJobs = [];
         saveJobs();
+        savePendingJobs();
         if (isMenuOpen && currentView === 'jobHistory') renderJobHistory();
         if (isMenuOpen && currentView === 'currentJob') renderCurrentJob();
         statusEl.innerHTML = '<span class="gps-source gps-network"></span>✅ Job history cleared';
@@ -1156,12 +1150,11 @@ document.addEventListener('DOMContentLoaded', () => {
       showMicIndicator();
     };
     speechRecognition.onresult = (event) => {
-      const transcript = event.results[0][0].transcript;
-      const response = detectJobResponse(transcript);
-      if (response === 'accept') {
+      const transcript = event.results[0][0].transcript.toLowerCase().trim();
+      if (/\baccept\b/.test(transcript) && !/\breject\b/.test(transcript)) {
         respondToJob(true);
         speakFeedback("Job accepted. Thank you.");
-      } else if (response === 'reject') {
+      } else if (/\breject\b/.test(transcript)) {
         respondToJob(false);
         speakFeedback("Job rejected. Understood.");
       }
@@ -1215,6 +1208,45 @@ document.addEventListener('DOMContentLoaded', () => {
     speechSynthesis.cancel();
     speechSynthesis.speak(utterance);
   }
+  // ===== OPEN JOB OFFER MODAL =====
+  function openJobOfferModal(job) {
+    currentJob = job;
+    pickupLocation.textContent = `${job.pubName} (${job.lat.toFixed(5)}, ${job.lng.toFixed(5)})`;
+    customerPhone.textContent = job.customerPhone;
+    jobPanel.style.display = 'block';
+
+    // Start 30s timer
+    let secondsLeft = 30;
+    const timerInterval = setInterval(() => {
+      secondsLeft--;
+      document.getElementById('timerSeconds').textContent = secondsLeft;
+      if (secondsLeft <= 0) {
+        clearInterval(timerInterval);
+        jobPanel.style.display = 'none';
+        stopVoiceListener();
+        // Remove from pending
+        pendingJobs = pendingJobs.filter(j => j.job !== job.job);
+        savePendingJobs();
+        currentJob = null;
+        statusEl.innerHTML = '⏰ Job expired';
+      }
+    }, 1000);
+
+    // TTS + mic
+    if ('speechSynthesis' in window) {
+      const utterance = new SpeechSynthesisUtterance(
+        `New job! Pickup at ${job.pubName}. Customer phone: ${job.customerPhone}`
+      );
+      utterance.lang = 'en-GB';
+      utterance.rate = 0.9;
+      utterance.onend = () => startVoiceListener();
+      speechSynthesis.speak(utterance);
+    } else {
+      startVoiceListener();
+    }
+
+    addJobToHistory(job, 'pending');
+  }
   // ===== MQTT =====
   function connectMQTT(){
     statusEl.innerHTML = `<span class="gps-source gps-poor"></span>Connecting to MQTT as: ${DRIVER_ID}`;
@@ -1231,63 +1263,66 @@ document.addEventListener('DOMContentLoaded', () => {
       client.subscribe(CHAT_PRIVATE_TOPIC);
       client.subscribe(JOB_RESULT_TOPIC);
       setInterval(cleanupOldDrivers, 30000);
+      // Clean expired pending jobs every 10s
+      setInterval(() => {
+        const now = Date.now();
+        let changed = false;
+        pendingJobs = pendingJobs.filter(job => {
+          if (now - job.receivedAt >= 30000) {
+            updateJobStatus(job.job, 'expired');
+            changed = true;
+            return false;
+          }
+          return true;
+        });
+        if (changed) savePendingJobs();
+      }, 10000);
     });
     client.on('message', (topic, message)=>{ 
       try{
         const data = JSON.parse(message.toString());
         if(topic.startsWith("pubs/requests/")){
-          currentJob = data;
-          pickupLocation.textContent = `${data.pubName} (${data.lat.toFixed(5)}, ${data.lng.toFixed(5)})`;
-          customerPhone.textContent = data.customerPhone;
-          jobPanel.style.display = 'block';
-          addJobToHistory(data, 'processing');
-          // === START 30-SECOND TIMER ===
-          const timerEl = document.getElementById('jobTimer');
-          const secondsEl = document.getElementById('timerSeconds');
-          timerEl.style.display = 'block';
-          secondsEl.textContent = '30';
-          let secondsLeft = 30;
-          const timerInterval = setInterval(() => {
-            secondsLeft--;
-            secondsEl.textContent = secondsLeft;
-            if (secondsLeft <= 0) {
-              clearInterval(timerInterval);
-              jobPanel.style.display = 'none';
-              stopVoiceListener();
-              currentJob = null;
-              statusEl.innerHTML = '<span class="gps-source gps-poor"></span>⏰ Job expired';
-            }
-          }, 1000);
-          // === TTS FIRST, THEN MIC ===
-          if ('speechSynthesis' in window) {
-            const utterance = new SpeechSynthesisUtterance(
-              `New job! Pickup at ${data.pubName}. Customer phone: ${data.customerPhone}`
+          // Radius filter
+          if (driverCoords) {
+            const distanceM = calculateDistance(
+              driverCoords.lat, driverCoords.lng,
+              data.lat, data.lng
             );
-            utterance.lang = 'en-GB';
-            utterance.rate = 0.9;
-            utterance.onend = () => {
-              if (jobPanel.style.display === 'block') {
-                startVoiceListener();
-              }
-            };
-            speechSynthesis.cancel();
-            speechSynthesis.speak(utterance);
-          } else {
-            startVoiceListener();
+            if (distanceM > maxRadius * 1000) {
+              // Auto-reject
+              client.publish(`jobs/${data.job}/status`, JSON.stringify({
+                job: data.job,
+                driver: DRIVER_ID,
+                status: "rejected",
+                reason: "out_of_radius",
+                ts: Date.now()
+              }));
+              addJobToHistory(data, 'rejected');
+              return;
+            }
           }
+
+          // Add to pending
+          const job = {
+            ...data,
+            receivedAt: Date.now(),
+            status: 'pending'
+          };
+          pendingJobs.push(job);
+          savePendingJobs();
+          addJobToHistory(job, 'pending');
+          statusEl.innerHTML = '📬 New job offer (pending)';
         }
         if(topic.startsWith("jobs/") && topic.endsWith(`/result/${DRIVER_ID}`)){
           const jobId = topic.split('/')[1];
           if(data.result === "won"){
-            statusEl.innerHTML = '<span class="gps-source gps-gps"></span>✅ Job allocated! Pickup: ' + currentJob?.pubName;
+            statusEl.innerHTML = '<span class="gps-source gps-gps"></span>✅ Job allocated! Pickup: ' + (currentJob?.pubName || 'unknown');
             updateJobStatus(jobId, 'allocated');
             const modal = document.getElementById('jobWonModal');
             modal.style.display = 'flex';
             if ('speechSynthesis' in window) {
-              const utterance = new SpeechSynthesisUtterance("Driver, you have won the job!");
+              const utterance = new SpeechSynthesisUtterance("You won the job!");
               utterance.lang = 'en-GB';
-              utterance.rate = 0.9;
-              speechSynthesis.cancel();
               speechSynthesis.speak(utterance);
             }
             document.getElementById('closeJobWonModal').onclick = () => {
@@ -1311,7 +1346,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const validStatuses = ['allocated', 'completed', 'lost', 'rejected', 'no_drivers_responded', 'no_acceptance', 'no_valid_acceptance'];
             if (validStatuses.includes(data.status)) {
               if(data.status === "allocated"){
-                statusEl.innerHTML = '<span class="gps-source gps-gps"></span>✅ Job allocated! Pickup: ' + currentJob?.pubName;
+                statusEl.innerHTML = '<span class="gps-source gps-gps"></span>✅ Job allocated! Pickup: ' + (currentJob?.pubName || 'unknown');
                 updateJobStatus(jobId, 'allocated');
               } else if(data.status === "lost"){
                 statusEl.innerHTML = '<span class="gps-source gps-network"></span>❌ Bid lost. Better luck next time!';
@@ -1386,18 +1421,24 @@ document.addEventListener('DOMContentLoaded', () => {
   // ===== JOB RESPONSE =====
   function respondToJob(accepted){
     if(!currentJob || !client) return;
+    const job = currentJob;
+
+    // Remove from pending
+    pendingJobs = pendingJobs.filter(j => j.job !== job.job);
+    savePendingJobs();
+
     if(accepted){
-      let bidLat = driverCoords?.lat || currentJob.lat;
-      let bidLng = driverCoords?.lng || currentJob.lng;
+      let bidLat = driverCoords?.lat || job.lat;
+      let bidLng = driverCoords?.lng || job.lng;
       const payload = { driver: DRIVER_ID, lat: bidLat, lng: bidLng };
-      client.publish(`jobs/${currentJob.job}/accept`, JSON.stringify(payload));
-      statusEl.innerHTML = '<span class="gps-source gps-gps"></span>✅ Bid sent for job ' + currentJob.job;
-      updateJobStatus(currentJob.job, 'bidding');
+      client.publish(`jobs/${job.job}/accept`, JSON.stringify(payload));
+      statusEl.innerHTML = '<span class="gps-source gps-gps"></span>✅ Bid sent for job ' + job.job;
+      updateJobStatus(job.job, 'bidding');
     } else {
-      const payload = { job: currentJob.job, driver: DRIVER_ID, status: "rejected", ts:Date.now() };
-      client.publish(`jobs/${currentJob.job}/status`, JSON.stringify(payload));
+      const payload = { job: job.job, driver: DRIVER_ID, status: "rejected", ts:Date.now() };
+      client.publish(`jobs/${job.job}/status`, JSON.stringify(payload));
       statusEl.innerHTML = '<span class="gps-source gps-network"></span>❌ Job rejected';
-      updateJobStatus(currentJob.job, 'rejected');
+      updateJobStatus(job.job, 'rejected');
     }
     jobPanel.style.display = 'none';
     stopVoiceListener();
