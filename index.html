@@ -5,7 +5,1404 @@
   <title>Black Cab Unite</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <style><!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Black Cab Unite</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
   <style>
+    body { 
+      margin:0; 
+      font-family:system-ui, -apple-system, "Segoe UI", sans-serif; 
+      background:#f7fafc; 
+      display:flex; 
+      flex-direction:column; 
+      height:100vh; 
+      overflow:hidden;
+    }
+    #map { 
+      flex:1; 
+      width:100%;
+      height:100%;
+      z-index:1;
+    }
+    /* Black Cab Unite Header Banner */
+    #headerBanner {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      background: #000;
+      color: #FFD700;
+      padding: 12px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 1001;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    }
+    #appTitle {
+      font-weight: 700;
+      font-size: 18px;
+      letter-spacing: 0.5px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    #appTitle::before {
+      content: "🚕";
+      font-size: 20px;
+    }
+    #menuBtn {
+      background: #FFD700;
+      color: #000;
+      border: none;
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      cursor: pointer;
+      z-index: 1002;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+      transition: transform 0.1s ease;
+    }
+    #menuBtn:active {
+      transform: scale(0.95);
+    }
+    /* Status bar at bottom */
+    #status { 
+      position: absolute;
+      bottom: 80px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(255, 255, 255, 0.9);
+      padding: 8px 16px;
+      border-radius: 24px;
+      font-size: 14px;
+      color: #333;
+      z-index: 1000;
+      text-align: center;
+      max-width: 90%;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      font-weight: 600;
+    }
+    .gps-source {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      margin-right: 6px;
+    }
+    .gps-gps { background: #28a745; }
+    .gps-network { background: #17a2b8; }
+    .gps-poor { background: #ffc107; }
+    /* Job panel */
+    #jobPanel { 
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: white;
+      padding: 20px;
+      border-top: 2px solid #eee;
+      z-index: 1000;
+      box-shadow: 0 -4px 20px rgba(0,0,0,0.1);
+      display: none;
+    }
+    #jobPanel h2 { 
+      margin: 0 0 16px 0; 
+      font-size: 20px; 
+      color: #1f6feb;
+      text-align: center;
+    }
+    #jobInfo { 
+      background: #f8f9fa;
+      padding: 16px;
+      border-radius: 12px;
+      margin-bottom: 24px;
+      font-size: 15px;
+      line-height: 1.5;
+    }
+    .job-info-label {
+      font-weight: 600;
+      color: #495057;
+      margin-bottom: 4px;
+    }
+    .job-info-value {
+      font-size: 16px;
+      color: #212529;
+    }
+    #jobTimer {
+      margin-top: 12px;
+      font-size: 14px;
+      color: #dc3545;
+      font-weight: bold;
+      display: none;
+    }
+    .job-actions {
+      display: flex;
+      gap: 16px;
+    }
+    .job-btn {
+      flex: 1;
+      padding: 18px 12px;
+      font-size: 18px;
+      border: none;
+      border-radius: 16px;
+      cursor: pointer;
+      font-weight: 700;
+      min-height: 56px;
+    }
+    .accept-btn {
+      background: linear-gradient(135deg, #28a745, #20c997);
+      color: white;
+    }
+    .reject-btn {
+      background: linear-gradient(135deg, #dc3545, #e83e8c);
+      color: white;
+    }
+    /* Glowing Mic Indicator */
+    #micIndicator {
+      text-align: center;
+      margin: 16px 0;
+      display: none;
+    }
+    .mic-icon {
+      width: 48px;
+      height: 48px;
+      background: #1f6feb;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: bold;
+      box-shadow: 0 0 12px #1f6feb;
+      animation: micGlow 1.5s infinite alternate;
+    }
+    @keyframes micGlow {
+      from { box-shadow: 0 0 12px #1f6feb; }
+      to { box-shadow: 0 0 24px #1f6feb, 0 0 32px #1f6feb; }
+    }
+    .mic-label {
+      font-size: 13px;
+      color: #555;
+      margin-top: 8px;
+    }
+    /* Driver icons */
+    .other-driver-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: bold;
+      font-size: 10px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+    }
+    /* Loading overlay */
+    #loadingOverlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.7);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 500;
+      color: white;
+      font-size: 18px;
+    }
+    .loading-spinner {
+      width: 40px;
+      height: 40px;
+      border: 4px solid rgba(255,255,255,0.3);
+      border-radius: 50%;
+      border-top: 4px solid white;
+      animation: spin 1s linear infinite;
+      margin-bottom: 16px;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    /* Main Menu Panel */
+    #menuPanel {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 70vh;
+      background: white;
+      display: none;
+      flex-direction: column;
+      z-index: 2000;
+      box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+      transform: translateY(100%);
+      transition: transform 0.3s ease;
+    }
+    #menuPanel.active {
+      display: flex;
+      transform: translateY(0);
+    }
+    #menuNav {
+      display: flex;
+      background: #f8f9fa;
+      border-bottom: 1px solid #eee;
+    }
+    .menu-nav-btn {
+      flex: 1;
+      background: transparent;
+      border: none;
+      padding: 16px 0;
+      font-weight: 600;
+      font-size: 15px;
+      color: #666;
+      cursor: pointer;
+    }
+    .menu-nav-btn.active {
+      color: #1f6feb;
+      background: #e8f0fe;
+      border-bottom: 3px solid #1f6feb;
+    }
+    #menuContent {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px;
+    }
+    .current-job-info {
+      padding: 20px;
+      background: #e8f5e8;
+      border-radius: 12px;
+      margin-bottom: 20px;
+      border-left: 4px solid #28a745;
+    }
+    .job-detail {
+      margin-bottom: 12px;
+    }
+    .job-label {
+      font-weight: 700;
+      color: #1f6feb;
+      font-size: 15px;
+      margin-bottom: 4px;
+    }
+    .job-value {
+      font-size: 17px;
+      color: #333;
+      word-break: break-word;
+    }
+    .no-current-job {
+      text-align: center;
+      padding: 50px 20px;
+      color: #666;
+    }
+    .no-current-job .icon {
+      font-size: 60px;
+      margin-bottom: 20px;
+      opacity: 0.7;
+    }
+    .job-item {
+      padding: 16px;
+      border: 1px solid #eee;
+      border-radius: 12px;
+      margin-bottom: 12px;
+      background: #f9f9f9;
+    }
+    .job-item.allocated { border-left: 4px solid #28a745; background: #e8f5e8; }
+    .job-item.processing, .job-item.bidding { border-left: 4px solid #1f6feb; background: #e8f0fe; }
+    .job-item.completed { border-left: 4px solid #6c757d; background: #f8f9fa; }
+    .job-item.lost, .job-item.rejected, .job-item.expired { border-left: 4px solid #dc3545; background: #f8d7da; }
+    .job-id { font-weight: 700; color: #1f6feb; margin-bottom: 6px; font-size: 16px; }
+    .job-pub { font-size: 14px; color: #666; margin-bottom: 6px; }
+    .job-phone { font-size: 15px; color: #333; margin-bottom: 6px; }
+    .job-status {
+      font-size: 12px;
+      font-weight: 700;
+      padding: 4px 8px;
+      border-radius: 6px;
+    }
+    .status-processing, .status-bidding { background: #d1e7ff; color: #084298; }
+    .status-allocated { background: #d1e7dd; color: #0f5132; }
+    .status-completed { background: #e2e3e5; color: #41464b; }
+    .status-lost, .status-rejected, .status-expired { background: #f8d7da; color: #842029; }
+    #chatMessages {
+      flex: 1;
+      padding: 16px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .message {
+      max-width: 85%;
+      padding: 14px 16px;
+      border-radius: 20px;
+      font-size: 15px;
+      line-height: 1.5;
+      word-wrap: break-word;
+    }
+    .received { background: #e9ecef; align-self: flex-start; border-bottom-left-radius: 6px; }
+    .sent { background: #000; color: white; align-self: flex-end; border-bottom-right-radius: 6px; }
+    .message-info {
+      font-size: 12px;
+      opacity: 0.8;
+      margin-top: 6px;
+      display: flex;
+      justify-content: space-between;
+    }
+    #chatInputContainer {
+      display: flex;
+      padding: 12px;
+      background: white;
+      border-top: 1px solid #eee;
+    }
+    #chatInput {
+      flex: 1;
+      padding: 14px;
+      border: 2px solid #ddd;
+      border-radius: 24px;
+      font-size: 16px;
+      outline: none;
+    }
+    #chatInput:focus {
+      border-color: #1f6feb;
+      box-shadow: 0 0 0 3px rgba(31, 111, 235, 0.2);
+    }
+    #sendBtn {
+      background: #000;
+      color: #FFD700;
+      border: none;
+      width: 52px;
+      height: 52px;
+      border-radius: 50%;
+      margin-left: 12px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      font-size: 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+    #chatList {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px;
+    }
+    .contact-item {
+      padding: 16px;
+      border-bottom: 1px solid #eee;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      cursor: pointer;
+      border-radius: 8px;
+      transition: background 0.2s;
+    }
+    .contact-item:hover {
+      background: #f8f9fa;
+    }
+    .contact-name {
+      font-weight: 700;
+      font-size: 16px;
+      margin-bottom: 4px;
+    }
+    .contact-status {
+      font-size: 13px;
+      color: #6c757d;
+    }
+    .contact-badge {
+      background: #28a745;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      margin-left: auto;
+    }
+    .offline { background: #6c757d; }
+    .unread-badge {
+      background: #FFD700;
+      color: #000;
+      border-radius: 12px;
+      padding: 4px 8px;
+      font-size: 12px;
+      margin-left: 8px;
+      font-weight: 700;
+    }
+    .settings-group {
+      margin-bottom: 24px;
+    }
+    .settings-label {
+      font-weight: 700;
+      margin-bottom: 12px;
+      color: #333;
+      font-size: 16px;
+    }
+    .settings-input {
+      width: 100%;
+      padding: 14px;
+      border: 2px solid #ccc;
+      border-radius: 12px;
+      font-size: 16px;
+      box-sizing: border-box;
+    }
+    .settings-input:focus {
+      border-color: #1f6feb;
+      outline: none;
+    }
+    .settings-btn {
+      background: #1f6feb;
+      color: white;
+      border: none;
+      padding: 16px;
+      border-radius: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      width: 100%;
+      margin-top: 12px;
+      font-size: 16px;
+      box-shadow: 0 4px 12px rgba(31, 111, 235, 0.3);
+    }
+    .settings-btn:hover {
+      background: #1958c4;
+      box-shadow: 0 6px 16px rgba(31, 111, 235, 0.4);
+    }
+    .settings-info {
+      background: #f8f9fa;
+      padding: 16px;
+      border-radius: 12px;
+      font-size: 14px;
+      color: #666;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <div id="headerBanner">
+    <div id="appTitle">Black Cab Unite</div>
+    <button id="menuBtn">☰</button>
+  </div>
+  <div id="status">Initializing...</div>
+  <div id="jobPanel">
+    <h2>🚕 New Job Request</h2>
+    <div id="jobInfo">
+      <div class="job-info-label">Pickup Location</div>
+      <div class="job-info-value" id="pickupLocation">Loading...</div>
+      <div class="job-info-label" style="margin-top:12px;">Customer Phone</div>
+      <div class="job-info-value" id="customerPhone">Loading...</div>
+      <div id="jobTimer">⏳ Expires in: <span id="timerSeconds">30</span>s</div>
+    </div>
+    <!-- GLOWING MIC INDICATOR -->
+    <div id="micIndicator">
+      <div class="mic-icon">🎤</div>
+      <div class="mic-label">Say “accept” or “reject”</div>
+    </div>
+    <div class="job-actions">
+      <button class="job-btn accept-btn" id="acceptBtn">✅ ACCEPT JOB</button>
+      <button class="job-btn reject-btn" id="rejectBtn">❌ REJECT</button>
+    </div>
+  </div>
+  <div id="loadingOverlay">
+    <div class="loading-spinner"></div>
+    <div>Loading map...</div>
+  </div>
+  <div id="menuPanel">
+    <div id="menuNav">
+      <button class="menu-nav-btn active" data-view="currentJob">📍 Current Job</button>
+      <button class="menu-nav-btn" data-view="jobHistory">📋 Job History</button>
+      <button class="menu-nav-btn" data-view="chat">💬 Chats</button>
+      <button class="menu-nav-btn" data-view="settings">⚙️ Settings</button>
+    </div>
+    <div id="menuContent"></div>
+  </div>
+  <!-- JOB WON MODAL -->
+  <div id="jobWonModal" style="
+    display: none;
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.7);
+    z-index: 2000;
+    justify-content: center;
+    align-items: center;
+  ">
+    <div style="
+      background: white;
+      padding: 30px;
+      border-radius: 16px;
+      text-align: center;
+      max-width: 320px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+    ">
+      <div style="font-size: 60px; margin-bottom: 16px;">🎉</div>
+      <h2 style="margin: 0 0 12px; color: #1f6feb;">You Won the Job!</h2>
+      <p style="margin: 0 0 24px; color: #555;">Get ready to pick up the customer.</p>
+      <button id="closeJobWonModal" style="
+        background: #1f6feb;
+        color: white;
+        border: none;
+        padding: 12px 24px;
+        border-radius: 12px;
+        font-weight: bold;
+        cursor: pointer;
+        width: 100%;
+      ">Close</button>
+    </div>
+  </div>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+  <script>
+document.addEventListener('DOMContentLoaded', () => {
+  // ===== Driver Registration =====
+  let DRIVER_ID = localStorage.getItem('driver_id');
+  function validateDriverId(id) {
+    if (!id) return false;
+    return /^[a-zA-Z0-9_-]+$/.test(id);
+  }
+  if(!DRIVER_ID || !validateDriverId(DRIVER_ID)) {
+    while (!DRIVER_ID || !validateDriverId(DRIVER_ID)) {
+      DRIVER_ID = prompt("Enter your driver name or ID (letters, numbers, hyphens only):");
+      if (DRIVER_ID === null) {
+        DRIVER_ID = 'driver-' + Math.random().toString(36).substr(2, 8);
+        break;
+      }
+    }
+    localStorage.setItem('driver_id', DRIVER_ID);
+  }
+  // ===== TTS INITIALIZER =====
+  let ttsInitialized = false;
+  function initTTS() {
+    if (ttsInitialized || !('speechSynthesis' in window)) return;
+    const utterance = new SpeechSynthesisUtterance('');
+    utterance.volume = 0;
+    speechSynthesis.speak(utterance);
+    ttsInitialized = true;
+  }
+  document.body.addEventListener('click', initTTS, { once: true });
+  document.body.addEventListener('touchstart', initTTS, { once: true });
+  const MQTT_BROKER = "wss://broker.hivemq.com:8884/mqtt"; 
+  const REQUEST_TOPIC = "pubs/requests/+";
+  const LOCATION_TOPIC = `drivers/${DRIVER_ID}/location`;
+  const DRIVERS_LOCATION_TOPIC = "drivers/+/location";
+  const CHAT_GROUP_TOPIC = "chat/group";
+  const CHAT_PRIVATE_TOPIC = `chat/private/${DRIVER_ID}/+`;
+  const JOB_RESULT_TOPIC = `jobs/+/result/${DRIVER_ID}`;
+  let driverCoords = null;
+  let map = null;
+  let driverMarker = null;
+  let pickupMarker = null;
+  let routeLine = null;
+  let client = null;
+  let currentJob = null;
+  let currentChat = null;
+  let isMenuOpen = false;
+  let currentView = 'currentJob';
+  let gpsWatchId = null;
+  let wakeLock = null;
+  const otherDrivers = {};
+  const driverStatus = {};
+  const chatMessages = { group: JSON.parse(localStorage.getItem(`chat_group_${DRIVER_ID}`)) || [] };
+  const unreadCounts = { group: 0 };
+  let driverJobs = JSON.parse(localStorage.getItem(`driver_jobs_${DRIVER_ID}`)) || [];
+  const statusEl = document.getElementById('status');
+  const jobPanel = document.getElementById('jobPanel');
+  const pickupLocation = document.getElementById('pickupLocation');
+  const customerPhone = document.getElementById('customerPhone');
+  const menuPanel = document.getElementById('menuPanel');
+  const menuContent = document.getElementById('menuContent');
+  const menuNavBtns = document.querySelectorAll('.menu-nav-btn');
+  const loadingOverlay = document.getElementById('loadingOverlay');
+  const micIndicator = document.getElementById('micIndicator');
+  // ===== BLACK CAB MARKER =====
+  const BLACK_CAB_SVG = `
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="36" height="36">
+  <path fill="#000" d="M18 4H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zM6 6h12v2H6V6zm0 10V9h12v7H6z"/>
+  <circle cx="8" cy="14" r="1.5" fill="#fff"/>
+  <circle cx="16" cy="14" r="1.5" fill="#fff"/>
+</svg>
+`;
+  function createBlackCabIcon(heading = 0) {
+    const svgUrl = 'data:image/svg+xml;base64,' + btoa(BLACK_CAB_SVG);
+    return L.divIcon({
+      html: `<img src="${svgUrl}" style="width:36px; height:36px; transform: rotate(${heading}deg);">`,
+      iconSize: [36, 36],
+      iconAnchor: [18, 18]
+    });
+  }
+  // ===== SIMPLE GPS (STABLE) =====
+  function calculateDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371000;
+    const φ1 = (lat1 * Math.PI) / 180;
+    const φ2 = (lat2 * Math.PI) / 180;
+    const Δφ = ((lat2 - lat1) * Math.PI) / 180;
+    const Δλ = ((lon2 - lon1) * Math.PI) / 180;
+    const a = Math.sin(Δφ/2)**2 + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ/2)**2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }
+  function updateDriverMarker(lat, lng, headingValue) {
+    if (!driverMarker) return;
+    driverMarker.setLatLng([lat, lng]);
+    driverMarker.setIcon(createBlackCabIcon(headingValue));
+  }
+  function updateMapCenter(lat, lng) {
+    if (!map) return;
+    const center = map.getCenter();
+    const dist = calculateDistance(center.lat, center.lng, lat, lng);
+    if (dist > 50) map.panTo([lat, lng]);
+  }
+  let lastPublish = 0;
+  let lastPublishCoords = null;
+  function publishLocationThrottled(gpsData) {
+    const now = Date.now();
+    if (!lastPublishCoords ||
+        calculateDistance(lastPublishCoords.lat, lastPublishCoords.lng, gpsData.lat, gpsData.lng) > 5 ||
+        now - lastPublish > 3000) {
+      client.publish(LOCATION_TOPIC, JSON.stringify({
+        driver: DRIVER_ID,
+        lat: gpsData.lat,
+        lng: gpsData.lng,
+        status: 'idle',
+        ts: now,
+        heading: Math.round(gpsData.heading)
+      }));
+      lastPublish = now;
+      lastPublishCoords = { lat: gpsData.lat, lng: gpsData.lng };
+    }
+  }
+  // ===== WAKE LOCK =====
+  async function requestWakeLock() {
+    try {
+      if ('wakeLock' in navigator) {
+        wakeLock = await navigator.wakeLock.request('screen');
+      }
+    } catch (err) {
+      console.warn('Wake Lock failed:', err);
+    }
+  }
+  function releaseWakeLock() {
+    if (wakeLock) {
+      wakeLock.release();
+      wakeLock = null;
+    }
+  }
+  // ===== MAP INIT =====
+  function initMapImmediately() {
+    loadingOverlay.style.display = 'none';
+    const defaultCenter = [52.4068, -1.5197];
+    map = L.map('map').setView(defaultCenter, 13);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { 
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+    driverMarker = L.marker(defaultCenter, {
+      title: "Location Initializing...",
+      icon: createBlackCabIcon(0)
+    }).addTo(map);
+    statusEl.innerHTML = '<span class="gps-source gps-poor"></span>Map loaded. Getting location...';
+    initGPS();
+  }
+  // ===== SIMPLE GPS INIT =====
+  function initGPS() {
+    if (!('geolocation' in navigator)) {
+      alert("Geolocation not supported.");
+      statusEl.innerHTML = '<span class="gps-source gps-poor"></span>Geolocation not supported.';
+      connectMQTT();
+      return;
+    }
+    statusEl.innerHTML = '<span class="gps-source gps-poor"></span>Searching for GPS...';
+    requestWakeLock();
+    gpsWatchId = navigator.geolocation.watchPosition(
+      pos => {
+        const gpsData = {
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+          speed: pos.coords.speed,
+          accuracy: pos.coords.accuracy || 50,
+          heading: pos.coords.heading || 0,
+          timestamp: pos.timestamp || Date.now()
+        };
+        driverCoords = gpsData;
+        updateDriverMarker(gpsData.lat, gpsData.lng, gpsData.heading);
+        updateMapCenter(gpsData.lat, gpsData.lng);
+        if (currentJob && routeLine) {
+          routeLine.setLatLngs([[gpsData.lat, gpsData.lng], [currentJob.lat, currentJob.lng]]);
+        }
+        publishLocationThrottled(gpsData);
+        let statusClass = 'gps-gps';
+        if (gpsData.accuracy > 50) statusClass = 'gps-poor';
+        else if (gpsData.accuracy > 20) statusClass = 'gps-network';
+        statusEl.innerHTML = `
+          <span class="gps-source ${statusClass}"></span>
+          GPS: ${gpsData.lat.toFixed(5)}, ${gpsData.lng.toFixed(5)} | 
+          Acc: ±${Math.round(gpsData.accuracy)}m | 
+          Speed: ${gpsData.speed ? Math.round(gpsData.speed * 3.6) : '--'} km/h
+        `;
+      },
+      err => {
+        statusEl.textContent = "GPS error: " + err.message;
+      },
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 8000 }
+    );
+    connectMQTT();
+  }
+  // ===== MENU NAVIGATION =====
+  function toggleMenu() {
+    isMenuOpen = !isMenuOpen;
+    if (isMenuOpen) {
+      menuPanel.classList.add('active');
+      renderCurrentView();
+    } else {
+      menuPanel.classList.remove('active');
+    }
+  }
+  function switchView(view) {
+    currentView = view;
+    menuNavBtns.forEach(btn => {
+      if (btn.dataset.view === view) {
+        btn.classList.add('active');
+      } else {
+        btn.classList.remove('active');
+      }
+    });
+    renderCurrentView();
+  }
+  function renderCurrentView() {
+    if (!isMenuOpen) return;
+    if (currentView === 'currentJob') {
+      renderCurrentJob();
+    } else if (currentView === 'jobHistory') {
+      renderJobHistory();
+    } else if (currentView === 'chat') {
+      renderChatView();
+    } else if (currentView === 'settings') {
+      renderSettingsView();
+    }
+  }
+  // ===== CURRENT JOB VIEW =====
+  function renderCurrentJob() {
+    const allocatedJobs = driverJobs.filter(job => job.status === 'allocated');
+    if (allocatedJobs.length === 0) {
+      menuContent.innerHTML = `
+        <div class="no-current-job">
+          <div class="icon">🚕</div>
+          <div>No active jobs</div>
+          <div style="font-size: 14px; color: #666; margin-top: 12px;">You'll see your current job here once allocated</div>
+        </div>
+      `;
+      return;
+    }
+    const current = allocatedJobs[0];
+    menuContent.innerHTML = `
+      <div class="current-job-info">
+        <div class="job-detail">
+          <div class="job-label">Job ID</div>
+          <div class="job-value">${current.job}</div>
+        </div>
+        <div class="job-detail">
+          <div class="job-label">Pub</div>
+          <div class="job-value">${current.pubName}</div>
+        </div>
+        <div class="job-detail">
+          <div class="job-label">Customer Phone</div>
+          <div class="job-value">📞 ${current.customerPhone}</div>
+        </div>
+        <div class="job-detail">
+          <div class="job-label">Pickup Location</div>
+          <div class="job-value">📍 ${current.lat.toFixed(5)}, ${current.lng.toFixed(5)}</div>
+        </div>
+        <div class="job-detail">
+          <div class="job-label">Status</div>
+          <div class="job-value">
+            <span class="job-status status-allocated">ALLOCATED</span>
+          </div>
+        </div>
+        <div class="job-detail">
+          <div class="job-label">Received</div>
+          <div class="job-value">${new Date(current.timestamp).toLocaleString()}</div>
+        </div>
+      </div>
+      <div style="text-align: center; padding: 16px;">
+        <button class="settings-btn" onclick="markJobCompleted('${current.job}')">Mark as Completed</button>
+      </div>
+    `;
+  }
+  // ===== JOB HISTORY MANAGEMENT =====
+  function saveJobs() {
+    localStorage.setItem(`driver_jobs_${DRIVER_ID}`, JSON.stringify(driverJobs));
+  }
+  function addJobToHistory(jobData, initialStatus = 'processing') {
+    const job = {
+      ...jobData,
+      status: initialStatus,
+      timestamp: Date.now(),
+      driver: DRIVER_ID
+    };
+    const existingIndex = driverJobs.findIndex(j => j.job === job.job);
+    if (existingIndex >= 0) {
+      driverJobs[existingIndex] = job;
+    } else {
+      driverJobs.unshift(job);
+      if (driverJobs.length > 50) {
+        driverJobs = driverJobs.slice(0, 50);
+      }
+    }
+    saveJobs();
+    if (isMenuOpen && currentView === 'jobHistory') renderJobHistory();
+    if (isMenuOpen && currentView === 'currentJob') renderCurrentJob();
+  }
+  function updateJobStatus(jobId, status) {
+    const jobIndex = driverJobs.findIndex(j => j.job === jobId);
+    if (jobIndex >= 0) {
+      driverJobs[jobIndex].status = status;
+      saveJobs();
+      if (isMenuOpen && currentView === 'jobHistory') renderJobHistory();
+      if (isMenuOpen && currentView === 'currentJob') renderCurrentJob();
+    }
+  }
+  function renderJobHistory() {
+    menuContent.innerHTML = '';
+    if (driverJobs.length === 0) {
+      menuContent.innerHTML = '<div style="text-align:center; padding:50px 20px; color:#666;">No jobs in history</div>';
+      return;
+    }
+    const jobsContainer = document.createElement('div');
+    jobsContainer.id = 'jobHistoryContent';
+    driverJobs.forEach(job => {
+      const jobEl = document.createElement('div');
+      jobEl.className = `job-item ${job.status}`;
+      const date = new Date(job.timestamp);
+      const timeStr = date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+      const dateStr = date.toLocaleDateString();
+      jobEl.innerHTML = `
+        <div class="job-id">${job.job}</div>
+        <div class="job-pub">Pub: ${job.pubName}</div>
+        <div class="job-phone">📞 ${job.customerPhone}</div>
+        <div class="job-phone">📍 ${job.lat.toFixed(5)}, ${job.lng.toFixed(5)}</div>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px;">
+          <span class="job-status status-${job.status}">${job.status.toUpperCase()}</span>
+          <span style="font-size:12px; color:#666;">${dateStr} ${timeStr}</span>
+        </div>
+      `;
+      jobsContainer.appendChild(jobEl);
+    });
+    menuContent.appendChild(jobsContainer);
+  }
+  // ===== CHAT FUNCTIONS =====
+  function renderChatView() {
+    menuContent.innerHTML = `
+      <div id="chatContent" style="height:100%; display:flex; flex-direction:column;">
+        <div id="chatList" style="flex:1; overflow-y:auto; padding:8px;">
+          <div class="contact-item" data-chat="group">
+            <div class="other-driver-icon" style="background:#6f42c1;">GC</div>
+            <div>
+              <div class="contact-name">Group Chat</div>
+              <div class="contact-status">All drivers</div>
+            </div>
+            ${unreadCounts.group > 0 ? `<div class="unread-badge">${unreadCounts.group}</div>` : ''}
+          </div>
+        </div>
+        <div id="chatMessages" style="display:none; flex:1; padding:16px; overflow-y:auto; display:flex; flex-direction:column; gap:12px;"></div>
+        <div id="chatInputContainer" style="display:none; padding:12px; background:white; border-top:1px solid #eee;">
+          <input type="text" id="chatInput" placeholder="Type a message..." autocomplete="off" style="flex:1; padding:14px; border:2px solid #ddd; border-radius:24px; font-size:16px;">
+          <button id="sendBtn" style="background:#000; color:#FFD700; border:none; width:52px; height:52px; border-radius:50%; margin-left:12px; cursor:pointer; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:20px; box-shadow:0 2px 8px rgba(0,0,0,0.2);">➤</button>
+        </div>
+      </div>
+    `;
+    document.getElementById('chatList').addEventListener('click', (e) => {
+      const contact = e.target.closest('.contact-item');
+      if (contact) {
+        e.stopPropagation(); // 👈 FIX: Prevent menu close
+        const chatId = contact.dataset.chat;
+        openChat(chatId);
+      }
+    });
+    document.getElementById('sendBtn').addEventListener('click', sendChatMessage);
+    document.getElementById('chatInput').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') sendChatMessage();
+    });
+    updateChatList();
+  }
+  function openChat(chatId) {
+    currentChat = chatId;
+    document.getElementById('chatList').style.display = 'none';
+    document.getElementById('chatMessages').style.display = 'flex';
+    document.getElementById('chatInputContainer').style.display = 'flex';
+    unreadCounts[chatId] = 0;
+    updateChatList();
+    renderChatMessages();
+    document.getElementById('chatInput').focus();
+  }
+  function renderChatMessages() {
+    const chatMessagesEl = document.getElementById('chatMessages');
+    chatMessagesEl.innerHTML = '';
+    const messages = chatMessages[currentChat] || [];
+    messages.forEach(msg => {
+      const messageEl = document.createElement('div');
+      messageEl.className = `message ${msg.sender === DRIVER_ID ? 'sent' : 'received'}`;
+      messageEl.innerHTML = `
+        ${msg.text}
+        <div class="message-info">
+          <span>${msg.sender}</span>
+          <span>${new Date(msg.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+        </div>
+      `;
+      chatMessagesEl.appendChild(messageEl);
+    });
+    chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
+  }
+  function updateChatList() {
+    const chatList = document.getElementById('chatList');
+    chatList.innerHTML = `
+      <div class="contact-item" data-chat="group">
+        <div class="other-driver-icon" style="background:#6f42c1;">GC</div>
+        <div>
+          <div class="contact-name">Group Chat</div>
+          <div class="contact-status">All drivers</div>
+        </div>
+        ${unreadCounts.group > 0 ? `<div class="unread-badge">${unreadCounts.group}</div>` : ''}
+      </div>
+    `;
+    Object.keys(otherDrivers).forEach(driverId => {
+      const isOnline = (Date.now() - (driverStatus[driverId] || 0)) < 60000;
+      const color = getColorForDriver(driverId);
+      const unread = unreadCounts[driverId] || 0;
+      const contactEl = document.createElement('div');
+      contactEl.className = 'contact-item';
+      contactEl.dataset.chat = driverId;
+      contactEl.innerHTML = `
+        <div class="other-driver-icon" style="background:${color}">${driverId.substring(0,2).toUpperCase()}</div>
+        <div>
+          <div class="contact-name">${driverId}</div>
+          <div class="contact-status">${isOnline ? 'Online' : 'Offline'}</div>
+        </div>
+        ${unread > 0 ? `<div class="unread-badge">${unread}</div>` : ''}
+      `;
+      chatList.appendChild(contactEl);
+    });
+  }
+  function sendChatMessage() {
+    const chatInput = document.getElementById('chatInput');
+    const text = chatInput.value.trim();
+    if (!text || !currentChat) return;
+    if (currentChat === 'group') {
+      const payload = { sender: DRIVER_ID, text, timestamp: Date.now() };
+      client.publish(CHAT_GROUP_TOPIC, JSON.stringify(payload));
+    } else {
+      const payload = { sender: DRIVER_ID, text, timestamp: Date.now() };
+      client.publish(`chat/private/${currentChat}/${DRIVER_ID}`, JSON.stringify(payload));
+    }
+    addMessage(currentChat, DRIVER_ID, text);
+    chatInput.value = '';
+  }
+  function addMessage(chatId, sender, text, timestamp = Date.now()) {
+    if (!chatMessages[chatId]) {
+      chatMessages[chatId] = [];
+      unreadCounts[chatId] = 0;
+    }
+    chatMessages[chatId].push({ sender, text, timestamp });
+    if (chatMessages[chatId].length > 50) {
+      chatMessages[chatId] = chatMessages[chatId].slice(-50);
+    }
+    if (!isMenuOpen || currentView !== 'chat' || currentChat !== chatId) {
+      unreadCounts[chatId] = (unreadCounts[chatId] || 0) + 1;
+    }
+    saveChatMessages();
+    updateChatList();
+    if (isMenuOpen && currentView === 'chat' && currentChat === chatId) {
+      renderChatMessages();
+    }
+  }
+  function saveChatMessages() {
+    if (currentChat) {
+      localStorage.setItem(`chat_${currentChat}_${DRIVER_ID}`, JSON.stringify(chatMessages[currentChat] || []));
+    }
+    localStorage.setItem(`chat_group_${DRIVER_ID}`, JSON.stringify(chatMessages.group || []));
+  }
+  // ===== SETTINGS VIEW =====
+  function renderSettingsView() {
+    menuContent.innerHTML = `
+      <div class="settings-group">
+        <div class="settings-label">Driver ID</div>
+        <input type="text" id="driverIdInput" class="settings-input" placeholder="Enter your driver ID" value="${DRIVER_ID}">
+        <button class="settings-btn" id="saveDriverIdBtn">Save Driver ID</button>
+        <div class="settings-info">
+          Your current ID: <span id="currentDriverId">${DRIVER_ID}</span>
+        </div>
+      </div>
+      <div class="settings-group">
+        <div class="settings-label">Clear Job History</div>
+        <button class="settings-btn" id="clearJobsBtn" style="background:#dc3545;">Clear All Jobs</button>
+      </div>
+    `;
+    document.getElementById('saveDriverIdBtn').addEventListener('click', () => {
+      const newId = document.getElementById('driverIdInput').value.trim();
+      if (!newId) {
+        alert("Please enter a driver ID");
+        return;
+      }
+      if (!validateDriverId(newId)) {
+        alert("Invalid driver ID. Use only letters, numbers, hyphens, and underscores.");
+        return;
+      }
+      localStorage.setItem('driver_id', newId);
+      DRIVER_ID = newId;
+      document.getElementById('currentDriverId').textContent = newId;
+      if (client) {
+        client.end();
+        setTimeout(() => connectMQTT(), 1000);
+      }
+      statusEl.innerHTML = `<span class="gps-source gps-gps"></span>✅ Driver ID updated to: ${newId}`;
+    });
+    document.getElementById('clearJobsBtn').addEventListener('click', () => {
+      if (confirm("Are you sure you want to clear all job history?")) {
+        driverJobs = [];
+        saveJobs();
+        if (isMenuOpen && currentView === 'jobHistory') renderJobHistory();
+        if (isMenuOpen && currentView === 'currentJob') renderCurrentJob();
+        statusEl.innerHTML = '<span class="gps-source gps-network"></span>✅ Job history cleared';
+      }
+    });
+  }
+  // ===== MARK JOB COMPLETED =====
+  window.markJobCompleted = function(jobId) {
+    const payload = { job: jobId, driver: DRIVER_ID, status: "completed", ts: Date.now() };
+    client.publish(`jobs/${jobId}/status`, JSON.stringify(payload));
+    updateJobStatus(jobId, 'completed');
+    statusEl.innerHTML = '<span class="gps-source gps-gps"></span>✅ Job marked as completed';
+  };
+  // ===== GET COLOR FOR DRIVER =====
+  function getColorForDriver(driverId) {
+    let hash = 0;
+    for (let i = 0; i < driverId.length; i++) {
+      hash = driverId.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const c = (hash & 0x00FFFFFF).toString(16).toUpperCase();
+    return "#" + "00000".substring(0, 6 - c.length) + c;
+  }
+  // ===== VOICE LISTENER WITH MIC INDICATOR =====
+  let speechRecognition = null;
+  let retryCount = 0;
+  const MAX_RETRIES = 5;
+  function showMicIndicator() {
+    micIndicator.style.display = 'block';
+  }
+  function hideMicIndicator() {
+    micIndicator.style.display = 'none';
+  }
+  function startVoiceListener() {
+    // ✅ FIX: Prevent multiple instances
+    if (speechRecognition) {
+      return;
+    }
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      console.warn("SpeechRecognition not supported");
+      return;
+    }
+    retryCount = 0;
+    speechRecognition = new SpeechRecognition();
+    speechRecognition.lang = 'en-US';
+    speechRecognition.continuous = false;
+    speechRecognition.interimResults = false;
+    speechRecognition.onstart = () => {
+      showMicIndicator();
+    };
+    speechRecognition.onresult = (event) => {
+      const transcript = event.results[0][0].transcript.toLowerCase().trim();
+      if (/\baccept\b/.test(transcript) && !/\breject\b/.test(transcript)) {
+        respondToJob(true);
+        speakFeedback("Job accepted. Thank you.");
+      } else if (/\breject\b/.test(transcript)) {
+        respondToJob(false);
+        speakFeedback("Job rejected. Understood.");
+      }
+    };
+    speechRecognition.onerror = (e) => {
+      if (e.error !== 'aborted') {
+        console.error("Voice error:", e.error);
+        retryCount++;
+        if (retryCount > MAX_RETRIES) {
+          speechRecognition = null;
+        }
+      }
+    };
+    speechRecognition.onend = () => {
+      hideMicIndicator();
+      // ✅ FIX: No auto-restart — stable behavior
+      speechRecognition = null;
+    };
+    try {
+      speechRecognition.start();
+    } catch (err) {
+      console.error("Failed to start SpeechRecognition:", err);
+      speechRecognition = null;
+    }
+  }
+  function stopVoiceListener() {
+    hideMicIndicator();
+    if (speechRecognition) {
+      speechRecognition.abort();
+      speechRecognition = null;
+    }
+  }
+  function speakFeedback(message) {
+    if (!('speechSynthesis' in window)) return;
+    const utterance = new SpeechSynthesisUtterance(message);
+    utterance.lang = 'en-GB';
+    utterance.rate = 0.9;
+    if (speechRecognition) speechRecognition.abort();
+    utterance.onend = () => {
+      if (jobPanel.style.display === 'block') {
+        startVoiceListener();
+      }
+    };
+    speechSynthesis.cancel();
+    speechSynthesis.speak(utterance);
+  }
+  // ===== MQTT =====
+  function connectMQTT(){
+    statusEl.innerHTML = `<span class="gps-source gps-poor"></span>Connecting to MQTT as: ${DRIVER_ID}`;
+    client = mqtt.connect(MQTT_BROKER, {
+      clientId: 'driver-' + DRIVER_ID + '-' + Math.random().toString(16).substr(2,8),
+      clean: true,
+      reconnectPeriod: 1000
+    });
+    client.on('connect', ()=>{ 
+      statusEl.innerHTML = `<span class="gps-source gps-gps"></span>Connected as: ${DRIVER_ID}`;
+      client.subscribe(REQUEST_TOPIC);
+      client.subscribe(DRIVERS_LOCATION_TOPIC);
+      client.subscribe(CHAT_GROUP_TOPIC);
+      client.subscribe(CHAT_PRIVATE_TOPIC);
+      client.subscribe(JOB_RESULT_TOPIC);
+      setInterval(cleanupOldDrivers, 30000);
+    });
+    client.on('message', (topic, message)=>{ 
+      try{
+        const data = JSON.parse(message.toString());
+        if(topic.startsWith("pubs/requests/")){
+          currentJob = data;
+          pickupLocation.textContent = `${data.pubName} (${data.lat.toFixed(5)}, ${data.lng.toFixed(5)})`;
+          customerPhone.textContent = data.customerPhone;
+          jobPanel.style.display = 'block';
+          addJobToHistory(data, 'processing');
+
+          // === START 30-SECOND TIMER ===
+          const timerEl = document.getElementById('jobTimer');
+          const secondsEl = document.getElementById('timerSeconds');
+          timerEl.style.display = 'block';
+          secondsEl.textContent = '30';
+          let secondsLeft = 30;
+          const timerInterval = setInterval(() => {
+            secondsLeft--;
+            secondsEl.textContent = secondsLeft;
+            if (secondsLeft <= 0) {
+              clearInterval(timerInterval);
+              jobPanel.style.display = 'none';
+              stopVoiceListener();
+              currentJob = null;
+              statusEl.innerHTML = '<span class="gps-source gps-poor"></span>⏰ Job expired';
+            }
+          }, 1000);
+
+          // === TTS FOR JOB OFFER ===
+          if ('speechSynthesis' in window) {
+            const utterance = new SpeechSynthesisUtterance(
+              `New job! Pickup at ${data.pubName}. Customer phone: ${data.customerPhone}`
+            );
+            utterance.lang = 'en-GB';
+            utterance.rate = 0.9;
+            utterance.onend = () => {
+              // ✅ Start mic ONLY after TTS ends
+              if (jobPanel.style.display === 'block') {
+                startVoiceListener();
+              }
+            };
+            speechSynthesis.cancel();
+            speechSynthesis.speak(utterance);
+          } else {
+            startVoiceListener();
+          }
+        }
+        if(topic.startsWith("jobs/") && topic.endsWith(`/result/${DRIVER_ID}`)){
+          const jobId = topic.split('/')[1];
+          if(data.result === "won"){
+            statusEl.innerHTML = '<span class="gps-source gps-gps"></span>✅ Job allocated! Pickup: ' + currentJob?.pubName;
+            updateJobStatus(jobId, 'allocated');
+            // === SHOW JOB-WON MODAL + TTS ===
+            const modal = document.getElementById('jobWonModal');
+            modal.style.display = 'flex';
+            if ('speechSynthesis' in window) {
+              const utterance = new SpeechSynthesisUtterance("Driver, you have won the job!");
+              utterance.lang = 'en-GB';
+              utterance.rate = 0.9;
+              speechSynthesis.cancel();
+              speechSynthesis.speak(utterance);
+            }
+            document.getElementById('closeJobWonModal').onclick = () => {
+              modal.style.display = 'none';
+            };
+          } else if(data.result === "lost"){
+            statusEl.innerHTML = '<span class="gps-source gps-network"></span>❌ Bid lost. Better luck next time!';
+            updateJobStatus(jobId, 'lost');
+          } else if(data.result === "too_late"){
+            statusEl.innerHTML = '<span class="gps-source gps-poor"></span>⏰ Bid too late - job expired';
+            updateJobStatus(jobId, 'expired');
+          }
+          // ⚠️ REMOVED: "not_allowed"
+          else if(data.result === "job_timeout"){
+            statusEl.innerHTML = '<span class="gps-source gps-poor"></span>⏰ Job expired - no valid bids received';
+            updateJobStatus(jobId, 'expired');
+          }
+        }
+        if(topic.startsWith("jobs/") && topic.endsWith("/status")){
+          const jobId = topic.split('/')[1];
+          if(data.driver === DRIVER_ID){
+            const validStatuses = ['allocated', 'completed', 'lost', 'rejected', 'no_drivers_responded', 'no_acceptance', 'no_valid_acceptance'];
+            if (validStatuses.includes(data.status)) {
+              if(data.status === "allocated"){
+                statusEl.innerHTML = '<span class="gps-source gps-gps"></span>✅ Job allocated! Pickup: ' + currentJob?.pubName;
+                updateJobStatus(jobId, 'allocated');
+              } else if(data.status === "lost"){
+                statusEl.innerHTML = '<span class="gps-source gps-network"></span>❌ Bid lost. Better luck next time!';
+                updateJobStatus(jobId, 'lost');
+              } else if(data.status === "completed"){
+                updateJobStatus(jobId, 'completed');
+              }
+            }
+          }
+        }
+        if(topic.startsWith("drivers/") && topic.endsWith("/location")){
+          const otherDriverId = topic.split('/')[1];
+          if(otherDriverId === DRIVER_ID) return;
+          if(data.lat !== undefined && data.lng !== undefined) {
+            updateOtherDriverMarker(otherDriverId, data.lat, data.lng, data);
+            driverStatus[otherDriverId] = Date.now();
+            if (isMenuOpen && currentView === 'chat') updateChatList();
+          }
+        }
+        if(topic === CHAT_GROUP_TOPIC) {
+          addMessage('group', data.sender, data.text, data.timestamp);
+        }
+        if(topic.startsWith(`chat/private/${DRIVER_ID}/`)) {
+          const senderId = topic.split('/')[3];
+          addMessage(senderId, senderId, data.text, data.timestamp);
+        }
+      } catch(e){ 
+        console.error("MQTT parse error:", e); 
+      }
+    });
+  }
+  function updateOtherDriverMarker(driverId, lat, lng, data) {
+    const now = Date.now();
+    if (!otherDrivers[driverId]) {
+      const color = getColorForDriver(driverId);
+      const marker = L.marker([lat, lng], {
+        icon: L.divIcon({
+          className: 'other-driver-icon',
+          html: `<div class="other-driver-icon" style="background:${color}">${driverId.substring(0,2).toUpperCase()}</div>`,
+          iconSize: [32, 32],
+          iconAnchor: [16, 16]
+        }),
+        title: driverId
+      }).addTo(map);
+      otherDrivers[driverId] = {
+        marker: marker,
+        lastUpdate: now,
+         data
+      };
+    } else {
+      otherDrivers[driverId].marker.setLatLng([lat, lng]);
+      otherDrivers[driverId].lastUpdate = now;
+      otherDrivers[driverId].data = data;
+    }
+  }
+  function cleanupOldDrivers() {
+    const now = Date.now();
+    const staleDrivers = [];
+    for (const driverId in otherDrivers) {
+      if (now - otherDrivers[driverId].lastUpdate > 60000) {
+        staleDrivers.push(driverId);
+      }
+    }
+    staleDrivers.forEach(driverId => {
+      map.removeLayer(otherDrivers[driverId].marker);
+      delete otherDrivers[driverId];
+      delete driverStatus[driverId];
+      delete unreadCounts[driverId];
+    });
+    if (isMenuOpen && currentView === 'chat') updateChatList();
+  }
+  // ===== JOB RESPONSE =====
+  function respondToJob(accepted){
+    if(!currentJob || !client) return;
+    if(accepted){
+      let bidLat = driverCoords?.lat || currentJob.lat;
+      let bidLng = driverCoords?.lng || currentJob.lng;
+      // ✅ FIX: Complete bid payload for tablet
+      const payload = {
+        job: currentJob.job,
+        driver: DRIVER_ID,
+        lat: bidLat,
+        lng: bidLng,
+        timestamp: Date.now()
+      };
+      client.publish(`jobs/${currentJob.job}/accept`, JSON.stringify(payload));
+      statusEl.innerHTML = '<span class="gps-source gps-gps"></span>✅ Bid sent for job ' + currentJob.job;
+      updateJobStatus(currentJob.job, 'bidding');
+    } else {
+      const payload = { job: currentJob.job, driver: DRIVER_ID, status: "rejected", ts:Date.now() };
+      client.publish(`jobs/${currentJob.job}/status`, JSON.stringify(payload));
+      statusEl.innerHTML = '<span class="gps-source gps-network"></span>❌ Job rejected';
+      updateJobStatus(currentJob.job, 'rejected');
+    }
+    jobPanel.style.display = 'none';
+    stopVoiceListener();
+    if(pickupMarker){ map.removeLayer(pickupMarker); pickupMarker = null; }
+    if(routeLine){ map.removeLayer(routeLine); routeLine = null; }
+    currentJob = null;
+  }
+  // ===== EVENT LISTENERS =====
+  document.getElementById('acceptBtn').addEventListener('click', () => respondToJob(true));
+  document.getElementById('rejectBtn').addEventListener('click', () => respondToJob(false));
+  document.getElementById('menuBtn').addEventListener('click', toggleMenu);
+  document.querySelectorAll('.menu-nav-btn').forEach(btn => {
+    btn.addEventListener('click', () => switchView(btn.dataset.view));
+  });
+  // ✅ FIX: Add stopPropagation for chat elements
+  document.getElementById('chatInputContainer').addEventListener('click', (e) => {
+    e.stopPropagation();
+  });
+  document.getElementById('sendBtn').addEventListener('click', (e) => {
+    e.stopPropagation();
+  });
+  document.getElementById('chatInput').addEventListener('focus', (e) => {
+    e.stopPropagation();
+  });
+  document.addEventListener('click', (e) => {
+    if (isMenuOpen && !menuPanel.contains(e.target) && e.target !== document.getElementById('menuBtn')) {
+      isMenuOpen = false;
+      menuPanel.classList.remove('active');
+    }
+  });
+  window.addEventListener('beforeunload', () => {
+    if (gpsWatchId) navigator.geolocation.clearWatch(gpsWatchId);
+    releaseWakeLock();
+  });
+  initMapImmediately();
+  renderCurrentJob();
+});
+  </script>
+</body>
+</html>
     body { 
       margin:0; 
       font-family:system-ui, -apple-system, "Segoe UI", sans-serif; 
@@ -1432,3 +2829,4 @@ function stopVoiceListener() {
   </script>
 </body>
 </html>
+
