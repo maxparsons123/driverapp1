@@ -615,6 +615,11 @@ document.addEventListener('DOMContentLoaded', () => {
   const menuNavBtns = document.querySelectorAll('.menu-nav-btn');
   const loadingOverlay = document.getElementById('loadingOverlay');
   const micIndicator = document.getElementById('micIndicator');
+  let currentJobTimer = null;
+  let speechRecognition = null;
+  let retryCount = 0;
+  const MAX_RETRIES = 5;
+
   // ===== BLACK CAB MARKER =====
   const BLACK_CAB_SVG = `
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="36" height="36">
@@ -631,6 +636,29 @@ document.addEventListener('DOMContentLoaded', () => {
       iconAnchor: [18, 18]
     });
   }
+
+  // ===== CLEANUP FUNCTION =====
+  function cleanupJobState() {
+    // Stop all TTS
+    if ('speechSynthesis' in window) {
+      speechSynthesis.cancel();
+    }
+    // Stop mic
+    stopVoiceListener();
+    // Clear timer
+    if (currentJobTimer) {
+      clearInterval(currentJobTimer);
+      currentJobTimer = null;
+    }
+    // Reset state
+    currentJob = null;
+    retryCount = 0;
+    // Hide UI
+    jobPanel.style.display = 'none';
+    if (pickupMarker) { map.removeLayer(pickupMarker); pickupMarker = null; }
+    if (routeLine) { map.removeLayer(routeLine); routeLine = null; }
+  }
+
   // ===== SIMPLE GPS (STABLE) =====
   function calculateDistance(lat1, lon1, lat2, lon2) {
     const R = 6371000;
@@ -671,6 +699,7 @@ document.addEventListener('DOMContentLoaded', () => {
       lastPublishCoords = { lat: gpsData.lat, lng: gpsData.lng };
     }
   }
+
   // ===== WAKE LOCK =====
   async function requestWakeLock() {
     try {
@@ -687,6 +716,7 @@ document.addEventListener('DOMContentLoaded', () => {
       wakeLock = null;
     }
   }
+
   // ===== MAP INIT =====
   function initMapImmediately() {
     loadingOverlay.style.display = 'none';
@@ -703,6 +733,7 @@ document.addEventListener('DOMContentLoaded', () => {
     statusEl.innerHTML = '<span class="gps-source gps-poor"></span>Map loaded. Getting location...';
     initGPS();
   }
+
   // ===== SIMPLE GPS INIT =====
   function initGPS() {
     if (!('geolocation' in navigator)) {
@@ -747,6 +778,7 @@ document.addEventListener('DOMContentLoaded', () => {
     );
     connectMQTT();
   }
+
   // ===== MENU NAVIGATION =====
   function toggleMenu() {
     isMenuOpen = !isMenuOpen;
@@ -780,6 +812,7 @@ document.addEventListener('DOMContentLoaded', () => {
       renderSettingsView();
     }
   }
+
   // ===== CURRENT JOB VIEW =====
   function renderCurrentJob() {
     const allocatedJobs = driverJobs.filter(job => job.status === 'allocated');
@@ -828,6 +861,7 @@ document.addEventListener('DOMContentLoaded', () => {
       </div>
     `;
   }
+
   // ===== JOB HISTORY MANAGEMENT =====
   function saveJobs() {
     localStorage.setItem(`driver_jobs_${DRIVER_ID}`, JSON.stringify(driverJobs));
@@ -889,6 +923,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     menuContent.appendChild(jobsContainer);
   }
+
   // ===== CHAT FUNCTIONS =====
   function renderChatView() {
     menuContent.innerHTML = `
@@ -1019,6 +1054,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     localStorage.setItem(`chat_group_${DRIVER_ID}`, JSON.stringify(chatMessages.group || []));
   }
+
   // ===== SETTINGS VIEW =====
   function renderSettingsView() {
     menuContent.innerHTML = `
@@ -1064,6 +1100,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   }
+
   // ===== MARK JOB COMPLETED =====
   window.markJobCompleted = function(jobId) {
     const payload = { job: jobId, driver: DRIVER_ID, status: "completed", ts: Date.now() };
@@ -1071,6 +1108,7 @@ document.addEventListener('DOMContentLoaded', () => {
     updateJobStatus(jobId, 'completed');
     statusEl.innerHTML = '<span class="gps-source gps-gps"></span>✅ Job marked as completed';
   };
+
   // ===== GET COLOR FOR DRIVER =====
   function getColorForDriver(driverId) {
     let hash = 0;
@@ -1080,72 +1118,73 @@ document.addEventListener('DOMContentLoaded', () => {
     const c = (hash & 0x00FFFFFF).toString(16).toUpperCase();
     return "#" + "00000".substring(0, 6 - c.length) + c;
   }
-  // ===== CONTINUOUS VOICE LISTENER =====
-  let currentRecognition = null;
+
+  // ===== VOICE LISTENER WITH MIC INDICATOR =====
   function showMicIndicator() {
     micIndicator.style.display = 'block';
   }
   function hideMicIndicator() {
     micIndicator.style.display = 'none';
   }
-  function startContinuousVoiceListener() {
+  function startVoiceListener() {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
       console.warn("SpeechRecognition not supported");
       return;
     }
-    stopVoiceListener(); // clear any existing
-    const recognition = new SpeechRecognition();
-    recognition.lang = 'en-US';
-    recognition.continuous = true;
-    recognition.interimResults = false;
-    currentRecognition = recognition;
-    recognition.onstart = () => {
+    retryCount = 0;
+    speechRecognition = new SpeechRecognition();
+    speechRecognition.lang = 'en-US';
+    speechRecognition.continuous = false;
+    speechRecognition.interimResults = false;
+    speechRecognition.onstart = () => {
       showMicIndicator();
     };
-    recognition.onresult = (event) => {
-      const last = event.results.length - 1;
-      const transcript = event.results[last][0].transcript.toLowerCase().trim();
+    speechRecognition.onresult = (event) => {
+      const transcript = event.results[0][0].transcript.toLowerCase().trim();
       if (/\baccept\b/.test(transcript) && !/\breject\b/.test(transcript)) {
-        clearInterval(window.jobTimerInterval);
-        recognition.stop();
+        cleanupJobState(); // ✅ CLEAN UP BEFORE RESPONDING
         respondToJob(true);
         speakFeedback("Job accepted. Thank you.");
       } else if (/\breject\b/.test(transcript)) {
-        clearInterval(window.jobTimerInterval);
-        recognition.stop();
+        cleanupJobState(); // ✅ CLEAN UP BEFORE RESPONDING
         respondToJob(false);
         speakFeedback("Job rejected. Understood.");
       }
     };
-    recognition.onerror = (e) => {
-      if (e.error !== 'no-speech' && e.error !== 'aborted') {
-        console.error("SpeechRecognition error:", e.error);
+    speechRecognition.onerror = (e) => {
+      if (e.error !== 'aborted') {
+        console.error("Voice error:", e.error);
+        retryCount++;
+        if (retryCount > MAX_RETRIES) {
+          speechRecognition = null;
+        }
       }
     };
-    recognition.onend = () => {
-      if (jobPanel.style.display === 'block') {
+    speechRecognition.onend = () => {
+      hideMicIndicator();
+      if (jobPanel.style.display === 'block' && retryCount <= MAX_RETRIES) {
         setTimeout(() => {
           if (jobPanel.style.display === 'block') {
-            startContinuousVoiceListener();
+            startVoiceListener();
           }
-        }, 600);
+        }, 500);
       } else {
-        hideMicIndicator();
+        speechRecognition = null;
       }
     };
     try {
-      recognition.start();
+      speechRecognition.start();
     } catch (err) {
-      console.error("Failed to start recognition:", err);
-      hideMicIndicator();
+      console.error("Failed to start SpeechRecognition:", err);
+      speechRecognition = null;
     }
   }
   function stopVoiceListener() {
     hideMicIndicator();
-    if (currentRecognition) {
-      currentRecognition.stop();
-      currentRecognition = null;
+    if (speechRecognition) {
+      speechRecognition.abort();
+      speechRecognition = null;
     }
   }
   function speakFeedback(message) {
@@ -1153,9 +1192,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const utterance = new SpeechSynthesisUtterance(message);
     utterance.lang = 'en-GB';
     utterance.rate = 0.9;
-    speechSynthesis.cancel();
     speechSynthesis.speak(utterance);
   }
+
   // ===== MQTT =====
   function connectMQTT(){
     statusEl.innerHTML = `<span class="gps-source gps-poor"></span>Connecting to MQTT as: ${DRIVER_ID}`;
@@ -1177,50 +1216,45 @@ document.addEventListener('DOMContentLoaded', () => {
       try{
         const data = JSON.parse(message.toString());
         if(topic.startsWith("pubs/requests/")){
+          // ✅ FULL CLEANUP BEFORE NEW JOB
+          cleanupJobState();
+
           currentJob = data;
           pickupLocation.textContent = `${data.pubName} (${data.lat.toFixed(5)}, ${data.lng.toFixed(5)})`;
           customerPhone.textContent = data.customerPhone;
           jobPanel.style.display = 'block';
           addJobToHistory(data, 'processing');
+
           // === START 30-SECOND TIMER ===
           const timerEl = document.getElementById('jobTimer');
           const secondsEl = document.getElementById('timerSeconds');
           timerEl.style.display = 'block';
+          secondsEl.textContent = '30';
           let secondsLeft = 30;
-          secondsEl.textContent = secondsLeft;
-          window.jobTimerInterval = setInterval(() => {
+          currentJobTimer = setInterval(() => {
             secondsLeft--;
             secondsEl.textContent = secondsLeft;
             if (secondsLeft <= 0) {
-              clearInterval(window.jobTimerInterval);
-              jobPanel.style.display = 'none';
-              stopVoiceListener();
-              currentJob = null;
+              cleanupJobState(); // ✅ CLEAN UP ON TIMEOUT
               statusEl.innerHTML = '<span class="gps-source gps-poor"></span>⏰ Job expired';
             }
           }, 1000);
+
           // === TTS FIRST, THEN MIC ===
           if ('speechSynthesis' in window) {
-            // Ensure TTS is initialized
-            if (!ttsInitialized) {
-              const prep = new SpeechSynthesisUtterance('');
-              prep.volume = 0;
-              speechSynthesis.speak(prep);
-              ttsInitialized = true;
-            }
             const utterance = new SpeechSynthesisUtterance(
               `New job! Pickup at ${data.pubName}. Customer phone: ${data.customerPhone}`
             );
             utterance.lang = 'en-GB';
             utterance.rate = 0.9;
             utterance.onend = () => {
-              startContinuousVoiceListener(); // ✅ Mic starts AFTER TTS
+              if (jobPanel.style.display === 'block') {
+                startVoiceListener(); // ✅ Mic after TTS
+              }
             };
-            speechSynthesis.cancel();
             speechSynthesis.speak(utterance);
           } else {
-            // No TTS → start mic immediately
-            startContinuousVoiceListener();
+            startVoiceListener();
           }
         }
         if(topic.startsWith("jobs/") && topic.endsWith(`/result/${DRIVER_ID}`)){
@@ -1234,7 +1268,6 @@ document.addEventListener('DOMContentLoaded', () => {
               const utterance = new SpeechSynthesisUtterance("Driver, you have won the job!");
               utterance.lang = 'en-GB';
               utterance.rate = 0.9;
-              speechSynthesis.cancel();
               speechSynthesis.speak(utterance);
             }
             document.getElementById('closeJobWonModal').onclick = () => {
@@ -1290,6 +1323,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   }
+
   function updateOtherDriverMarker(driverId, lat, lng, data) {
     const now = Date.now();
     if (!otherDrivers[driverId]) {
@@ -1330,6 +1364,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     if (isMenuOpen && currentView === 'chat') updateChatList();
   }
+
   // ===== JOB RESPONSE =====
   function respondToJob(accepted){
     if(!currentJob || !client) return;
@@ -1346,15 +1381,18 @@ document.addEventListener('DOMContentLoaded', () => {
       statusEl.innerHTML = '<span class="gps-source gps-network"></span>❌ Job rejected';
       updateJobStatus(currentJob.job, 'rejected');
     }
-    jobPanel.style.display = 'none';
-    stopVoiceListener();
-    if(pickupMarker){ map.removeLayer(pickupMarker); pickupMarker = null; }
-    if(routeLine){ map.removeLayer(routeLine); routeLine = null; }
-    currentJob = null;
+    // cleanupJobState() already called in voice handler
   }
+
   // ===== EVENT LISTENERS =====
-  document.getElementById('acceptBtn').addEventListener('click', () => respondToJob(true));
-  document.getElementById('rejectBtn').addEventListener('click', () => respondToJob(false));
+  document.getElementById('acceptBtn').addEventListener('click', () => {
+    cleanupJobState();
+    respondToJob(true);
+  });
+  document.getElementById('rejectBtn').addEventListener('click', () => {
+    cleanupJobState();
+    respondToJob(false);
+  });
   document.getElementById('menuBtn').addEventListener('click', toggleMenu);
   document.querySelectorAll('.menu-nav-btn').forEach(btn => {
     btn.addEventListener('click', () => switchView(btn.dataset.view));
