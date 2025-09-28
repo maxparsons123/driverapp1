@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <title>Black Cab Unite v1.0.4</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <!-- ✅ Prevent caching — auto-reload on new version -->
+  <!-- ✅ Prevent caching -->
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
@@ -619,41 +619,32 @@ document.addEventListener('DOMContentLoaded', () => {
   const menuNavBtns = document.querySelectorAll('.menu-nav-btn');
   const loadingOverlay = document.getElementById('loadingOverlay');
   const micIndicator = document.getElementById('micIndicator');
-  let currentJobTimer = null;
-  let speechRecognition = null;
-  let retryCount = 0;
-  const MAX_RETRIES = 5;
 
-  // ===== BLACK CAB MARKER (NEW SVG WITH "TAXI" TEXT) =====
+  // ===== NEW BLACK CAB MARKER WITH "TAXI" TEXT =====
   const BLACK_CAB_SVG = `
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 36" width="64" height="36">
   <!-- Car body -->
   <rect x="4" y="14" width="56" height="14" rx="3" ry="3" fill="#000"/>
-  
   <!-- Cab roof -->
   <path d="M20 14v-4c0-3 2-5 5-5h14c3 0 5 2 5 5v4h-24z" fill="#000"/>
-  
   <!-- Taxi light (yellow) -->
   <rect x="28" y="4" width="8" height="3" rx="1" fill="#FFD700" stroke="#000" stroke-width="0.5"/>
-  
   <!-- Taxi light text -->
   <text x="32" y="6.6" text-anchor="middle" font-size="2.2" font-weight="bold" fill="#000" font-family="Arial, sans-serif">
     TAXI
   </text>
-  
   <!-- Windows -->
   <rect x="23" y="7" width="7" height="6" rx="1" fill="#fff"/>
   <rect x="34" y="7" width="7" height="6" rx="1" fill="#fff"/>
-  
   <!-- Wheels -->
   <circle cx="16" cy="28" r="4" fill="#fff" stroke="#000" stroke-width="1"/>
   <circle cx="48" cy="28" r="4" fill="#fff" stroke="#000" stroke-width="1"/>
 </svg>
 `;
   function createBlackCabIcon(heading = 0) {
-    const iconDiv = document.createElement('div');
-    iconDiv.innerHTML = BLACK_CAB_SVG;
-    const svg = iconDiv.firstChild;
+    const div = document.createElement('div');
+    div.innerHTML = BLACK_CAB_SVG;
+    const svg = div.firstElementChild;
     svg.style.transform = `rotate(${heading}deg)`;
     svg.style.transformOrigin = 'center';
     return L.divIcon({
@@ -666,60 +657,21 @@ document.addEventListener('DOMContentLoaded', () => {
   // ===== FUZZY LOGIC FOR SPEECH DETECTION =====
   function detectJobResponse(transcript) {
     const text = transcript.toLowerCase().trim();
-    
-    // Acceptance keywords and phrases
     const acceptKeywords = [
       'accept', 'yes', 'yeah', 'yep', 'sure', 'okay', 'ok', 'take it', 
       'i want', 'i will', 'i can', 'lets go', 'let me', 'sounds good',
       'i accept', 'can i accept', 'will accept', 'take that', 'take the job',
       'go for it', 'do it', 'lets do it', 'i am in', 'count me in'
     ];
-    
-    // Rejection keywords and phrases
     const rejectKeywords = [
       'reject', 'no', 'nope', 'pass', 'skip', 'dont want', 'do not want',
       'not interested', 'cant do', 'cannot do', 'too far', 'busy',
       'i reject', 'reject that', 'reject the job', 'not taking',
       'not today', 'maybe later', 'not now', 'decline', 'refuse'
     ];
-    
-    // Check for acceptance
-    for (const keyword of acceptKeywords) {
-      if (text.includes(keyword)) {
-        return 'accept';
-      }
-    }
-    
-    // Check for rejection
-    for (const keyword of rejectKeywords) {
-      if (text.includes(keyword)) {
-        return 'reject';
-      }
-    }
-    
+    for (const kw of acceptKeywords) if (text.includes(kw)) return 'accept';
+    for (const kw of rejectKeywords) if (text.includes(kw)) return 'reject';
     return 'unknown';
-  }
-
-  // ===== CLEANUP FUNCTION =====
-  function cleanupJobState() {
-    // Cancel all TTS
-    if ('speechSynthesis' in window) {
-      speechSynthesis.cancel();
-    }
-    // Stop mic
-    stopVoiceListener();
-    // Clear timer
-    if (currentJobTimer) {
-      clearInterval(currentJobTimer);
-      currentJobTimer = null;
-    }
-    // Reset state
-    currentJob = null;
-    retryCount = 0;
-    // Hide UI
-    jobPanel.style.display = 'none';
-    if (pickupMarker) { map.removeLayer(pickupMarker); pickupMarker = null; }
-    if (routeLine) { map.removeLayer(routeLine); routeLine = null; }
   }
 
   // ===== SIMPLE GPS (STABLE) =====
@@ -762,15 +714,14 @@ document.addEventListener('DOMContentLoaded', () => {
       lastPublishCoords = { lat: gpsData.lat, lng: gpsData.lng };
     }
   }
-
   // ===== WAKE LOCK =====
   async function requestWakeLock() {
     try {
-      if ('wakeLock' in navigator && !wakeLock) {
+      if ('wakeLock' in navigator) {
         wakeLock = await navigator.wakeLock.request('screen');
       }
     } catch (err) {
-      console.warn('Wake Lock not available:', err);
+      console.warn('Wake Lock failed:', err);
     }
   }
   function releaseWakeLock() {
@@ -779,7 +730,6 @@ document.addEventListener('DOMContentLoaded', () => {
       wakeLock = null;
     }
   }
-
   // ===== MAP INIT =====
   function initMapImmediately() {
     loadingOverlay.style.display = 'none';
@@ -794,13 +744,8 @@ document.addEventListener('DOMContentLoaded', () => {
       icon: createBlackCabIcon(0)
     }).addTo(map);
     statusEl.innerHTML = '<span class="gps-source gps-poor"></span>Map loaded. Getting location...';
-
-    // ✅ REQUEST WAKE LOCK ONCE — KEEP SCREEN ON FOREVER WHILE APP IS OPEN
-    requestWakeLock();
-
     initGPS();
   }
-
   // ===== SIMPLE GPS INIT =====
   function initGPS() {
     if (!('geolocation' in navigator)) {
@@ -810,6 +755,7 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
     statusEl.innerHTML = '<span class="gps-source gps-poor"></span>Searching for GPS...';
+    requestWakeLock();
     gpsWatchId = navigator.geolocation.watchPosition(
       pos => {
         const gpsData = {
@@ -844,7 +790,6 @@ document.addEventListener('DOMContentLoaded', () => {
     );
     connectMQTT();
   }
-
   // ===== MENU NAVIGATION =====
   function toggleMenu() {
     isMenuOpen = !isMenuOpen;
@@ -878,7 +823,6 @@ document.addEventListener('DOMContentLoaded', () => {
       renderSettingsView();
     }
   }
-
   // ===== CURRENT JOB VIEW =====
   function renderCurrentJob() {
     const allocatedJobs = driverJobs.filter(job => job.status === 'allocated');
@@ -927,7 +871,6 @@ document.addEventListener('DOMContentLoaded', () => {
       </div>
     `;
   }
-
   // ===== JOB HISTORY MANAGEMENT =====
   function saveJobs() {
     localStorage.setItem(`driver_jobs_${DRIVER_ID}`, JSON.stringify(driverJobs));
@@ -989,7 +932,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     menuContent.appendChild(jobsContainer);
   }
-
   // ===== CHAT FUNCTIONS =====
   function renderChatView() {
     menuContent.innerHTML = `
@@ -1120,7 +1062,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     localStorage.setItem(`chat_group_${DRIVER_ID}`, JSON.stringify(chatMessages.group || []));
   }
-
   // ===== SETTINGS VIEW =====
   function renderSettingsView() {
     menuContent.innerHTML = `
@@ -1166,7 +1107,6 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   }
-
   // ===== MARK JOB COMPLETED =====
   window.markJobCompleted = function(jobId) {
     const payload = { job: jobId, driver: DRIVER_ID, status: "completed", ts: Date.now() };
@@ -1174,7 +1114,6 @@ document.addEventListener('DOMContentLoaded', () => {
     updateJobStatus(jobId, 'completed');
     statusEl.innerHTML = '<span class="gps-source gps-gps"></span>✅ Job marked as completed';
   };
-
   // ===== GET COLOR FOR DRIVER =====
   function getColorForDriver(driverId) {
     let hash = 0;
@@ -1184,8 +1123,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const c = (hash & 0x00FFFFFF).toString(16).toUpperCase();
     return "#" + "00000".substring(0, 6 - c.length) + c;
   }
-
   // ===== VOICE LISTENER WITH MIC INDICATOR =====
+  let speechRecognition = null;
+  let retryCount = 0;
+  const MAX_RETRIES = 5;
   function showMicIndicator() {
     micIndicator.style.display = 'block';
   }
@@ -1209,17 +1150,13 @@ document.addEventListener('DOMContentLoaded', () => {
     speechRecognition.onresult = (event) => {
       const transcript = event.results[0][0].transcript;
       const response = detectJobResponse(transcript);
-      
       if (response === 'accept') {
-        cleanupJobState();
         respondToJob(true);
         speakFeedback("Job accepted. Thank you.");
       } else if (response === 'reject') {
-        cleanupJobState();
         respondToJob(false);
         speakFeedback("Job rejected. Understood.");
       }
-      // If 'unknown', keep listening
     };
     speechRecognition.onerror = (e) => {
       if (e.error !== 'aborted') {
@@ -1261,9 +1198,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const utterance = new SpeechSynthesisUtterance(message);
     utterance.lang = 'en-GB';
     utterance.rate = 0.9;
+    if (speechRecognition) speechRecognition.abort();
+    utterance.onend = () => {
+      if (jobPanel.style.display === 'block') {
+        startVoiceListener();
+      }
+    };
+    speechSynthesis.cancel();
     speechSynthesis.speak(utterance);
   }
-
   // ===== MQTT =====
   function connectMQTT(){
     statusEl.innerHTML = `<span class="gps-source gps-poor"></span>Connecting to MQTT as: ${DRIVER_ID}`;
@@ -1285,32 +1228,29 @@ document.addEventListener('DOMContentLoaded', () => {
       try{
         const data = JSON.parse(message.toString());
         if(topic.startsWith("pubs/requests/")){
-          // ✅ FULL CLEANUP BEFORE NEW JOB
-          cleanupJobState();
-
           currentJob = data;
           pickupLocation.textContent = `${data.pubName} (${data.lat.toFixed(5)}, ${data.lng.toFixed(5)})`;
           customerPhone.textContent = data.customerPhone;
           jobPanel.style.display = 'block';
-
           addJobToHistory(data, 'processing');
-
           // === START 30-SECOND TIMER ===
           const timerEl = document.getElementById('jobTimer');
           const secondsEl = document.getElementById('timerSeconds');
           timerEl.style.display = 'block';
           secondsEl.textContent = '30';
           let secondsLeft = 30;
-          currentJobTimer = setInterval(() => {
+          const timerInterval = setInterval(() => {
             secondsLeft--;
             secondsEl.textContent = secondsLeft;
             if (secondsLeft <= 0) {
-              cleanupJobState(); // ✅ CLEAN UP ON TIMEOUT
+              clearInterval(timerInterval);
+              jobPanel.style.display = 'none';
+              stopVoiceListener();
+              currentJob = null;
               statusEl.innerHTML = '<span class="gps-source gps-poor"></span>⏰ Job expired';
             }
           }, 1000);
-
-          // === TTS AFTER CLEANUP ===
+          // === TTS FIRST, THEN MIC ===
           if ('speechSynthesis' in window) {
             const utterance = new SpeechSynthesisUtterance(
               `New job! Pickup at ${data.pubName}. Customer phone: ${data.customerPhone}`
@@ -1322,6 +1262,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 startVoiceListener();
               }
             };
+            speechSynthesis.cancel();
             speechSynthesis.speak(utterance);
           } else {
             startVoiceListener();
@@ -1338,6 +1279,7 @@ document.addEventListener('DOMContentLoaded', () => {
               const utterance = new SpeechSynthesisUtterance("Driver, you have won the job!");
               utterance.lang = 'en-GB';
               utterance.rate = 0.9;
+              speechSynthesis.cancel();
               speechSynthesis.speak(utterance);
             }
             document.getElementById('closeJobWonModal').onclick = () => {
@@ -1393,7 +1335,6 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   }
-
   function updateOtherDriverMarker(driverId, lat, lng, data) {
     const now = Date.now();
     if (!otherDrivers[driverId]) {
@@ -1434,7 +1375,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     if (isMenuOpen && currentView === 'chat') updateChatList();
   }
-
   // ===== JOB RESPONSE =====
   function respondToJob(accepted){
     if(!currentJob || !client) return;
@@ -1451,18 +1391,15 @@ document.addEventListener('DOMContentLoaded', () => {
       statusEl.innerHTML = '<span class="gps-source gps-network"></span>❌ Job rejected';
       updateJobStatus(currentJob.job, 'rejected');
     }
-    // cleanupJobState() already called in voice handler
+    jobPanel.style.display = 'none';
+    stopVoiceListener();
+    if(pickupMarker){ map.removeLayer(pickupMarker); pickupMarker = null; }
+    if(routeLine){ map.removeLayer(routeLine); routeLine = null; }
+    currentJob = null;
   }
-
   // ===== EVENT LISTENERS =====
-  document.getElementById('acceptBtn').addEventListener('click', () => {
-    cleanupJobState();
-    respondToJob(true);
-  });
-  document.getElementById('rejectBtn').addEventListener('click', () => {
-    cleanupJobState();
-    respondToJob(false);
-  });
+  document.getElementById('acceptBtn').addEventListener('click', () => respondToJob(true));
+  document.getElementById('rejectBtn').addEventListener('click', () => respondToJob(false));
   document.getElementById('menuBtn').addEventListener('click', toggleMenu);
   document.querySelectorAll('.menu-nav-btn').forEach(btn => {
     btn.addEventListener('click', () => switchView(btn.dataset.view));
