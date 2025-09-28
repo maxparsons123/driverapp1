@@ -1080,73 +1080,72 @@ document.addEventListener('DOMContentLoaded', () => {
     const c = (hash & 0x00FFFFFF).toString(16).toUpperCase();
     return "#" + "00000".substring(0, 6 - c.length) + c;
   }
-  // ===== VOICE LISTENER WITH MIC INDICATOR =====
-  let speechRecognition = null;
-  let retryCount = 0;
-  const MAX_RETRIES = 5;
+  // ===== CONTINUOUS VOICE LISTENER =====
+  let currentRecognition = null;
   function showMicIndicator() {
     micIndicator.style.display = 'block';
   }
   function hideMicIndicator() {
     micIndicator.style.display = 'none';
   }
-  function startVoiceListener() {
+  function startContinuousVoiceListener() {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
       console.warn("SpeechRecognition not supported");
       return;
     }
-    retryCount = 0;
-    speechRecognition = new SpeechRecognition();
-    speechRecognition.lang = 'en-US';
-    speechRecognition.continuous = false;
-    speechRecognition.interimResults = false;
-    speechRecognition.onstart = () => {
+    stopVoiceListener(); // clear any existing
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'en-US';
+    recognition.continuous = true;
+    recognition.interimResults = false;
+    currentRecognition = recognition;
+    recognition.onstart = () => {
       showMicIndicator();
     };
-    speechRecognition.onresult = (event) => {
-      const transcript = event.results[0][0].transcript.toLowerCase().trim();
+    recognition.onresult = (event) => {
+      const last = event.results.length - 1;
+      const transcript = event.results[last][0].transcript.toLowerCase().trim();
       if (/\baccept\b/.test(transcript) && !/\breject\b/.test(transcript)) {
+        clearInterval(window.jobTimerInterval);
+        recognition.stop();
         respondToJob(true);
         speakFeedback("Job accepted. Thank you.");
       } else if (/\breject\b/.test(transcript)) {
+        clearInterval(window.jobTimerInterval);
+        recognition.stop();
         respondToJob(false);
         speakFeedback("Job rejected. Understood.");
       }
     };
-    speechRecognition.onerror = (e) => {
-      if (e.error !== 'aborted') {
-        console.error("Voice error:", e.error);
-        retryCount++;
-        if (retryCount > MAX_RETRIES) {
-          speechRecognition = null;
-        }
+    recognition.onerror = (e) => {
+      if (e.error !== 'no-speech' && e.error !== 'aborted') {
+        console.error("SpeechRecognition error:", e.error);
       }
     };
-    speechRecognition.onend = () => {
-      hideMicIndicator();
-      if (jobPanel.style.display === 'block' && retryCount <= MAX_RETRIES) {
+    recognition.onend = () => {
+      if (jobPanel.style.display === 'block') {
         setTimeout(() => {
           if (jobPanel.style.display === 'block') {
-            startVoiceListener();
+            startContinuousVoiceListener();
           }
-        }, 500);
+        }, 600);
       } else {
-        speechRecognition = null;
+        hideMicIndicator();
       }
     };
     try {
-      speechRecognition.start();
+      recognition.start();
     } catch (err) {
-      console.error("Failed to start SpeechRecognition:", err);
-      speechRecognition = null;
+      console.error("Failed to start recognition:", err);
+      hideMicIndicator();
     }
   }
   function stopVoiceListener() {
     hideMicIndicator();
-    if (speechRecognition) {
-      speechRecognition.abort();
-      speechRecognition = null;
+    if (currentRecognition) {
+      currentRecognition.stop();
+      currentRecognition = null;
     }
   }
   function speakFeedback(message) {
@@ -1154,12 +1153,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const utterance = new SpeechSynthesisUtterance(message);
     utterance.lang = 'en-GB';
     utterance.rate = 0.9;
-    if (speechRecognition) speechRecognition.abort();
-    utterance.onend = () => {
-      if (jobPanel.style.display === 'block') {
-        startVoiceListener();
-      }
-    };
     speechSynthesis.cancel();
     speechSynthesis.speak(utterance);
   }
@@ -1188,51 +1181,53 @@ document.addEventListener('DOMContentLoaded', () => {
           pickupLocation.textContent = `${data.pubName} (${data.lat.toFixed(5)}, ${data.lng.toFixed(5)})`;
           customerPhone.textContent = data.customerPhone;
           jobPanel.style.display = 'block';
-
+          addJobToHistory(data, 'processing');
           // === START 30-SECOND TIMER ===
           const timerEl = document.getElementById('jobTimer');
           const secondsEl = document.getElementById('timerSeconds');
           timerEl.style.display = 'block';
-          secondsEl.textContent = '30';
           let secondsLeft = 30;
-          const timerInterval = setInterval(() => {
+          secondsEl.textContent = secondsLeft;
+          window.jobTimerInterval = setInterval(() => {
             secondsLeft--;
             secondsEl.textContent = secondsLeft;
             if (secondsLeft <= 0) {
-              clearInterval(timerInterval);
+              clearInterval(window.jobTimerInterval);
               jobPanel.style.display = 'none';
               stopVoiceListener();
               currentJob = null;
               statusEl.innerHTML = '<span class="gps-source gps-poor"></span>⏰ Job expired';
             }
           }, 1000);
-
-          // === TTS FIRST, THEN MIC AFTER TTS ENDS ===
+          // === TTS FIRST, THEN MIC ===
           if ('speechSynthesis' in window) {
+            // Ensure TTS is initialized
+            if (!ttsInitialized) {
+              const prep = new SpeechSynthesisUtterance('');
+              prep.volume = 0;
+              speechSynthesis.speak(prep);
+              ttsInitialized = true;
+            }
             const utterance = new SpeechSynthesisUtterance(
               `New job! Pickup at ${data.pubName}. Customer phone: ${data.customerPhone}`
             );
             utterance.lang = 'en-GB';
             utterance.rate = 0.9;
             utterance.onend = () => {
-              // ✅ Only start mic AFTER TTS finishes
-              startVoiceListener();
+              startContinuousVoiceListener(); // ✅ Mic starts AFTER TTS
             };
             speechSynthesis.cancel();
             speechSynthesis.speak(utterance);
           } else {
-            // Fallback: no TTS → start mic immediately
-            startVoiceListener();
+            // No TTS → start mic immediately
+            startContinuousVoiceListener();
           }
-
-          addJobToHistory(data, 'processing');
         }
         if(topic.startsWith("jobs/") && topic.endsWith(`/result/${DRIVER_ID}`)){
           const jobId = topic.split('/')[1];
           if(data.result === "won"){
             statusEl.innerHTML = '<span class="gps-source gps-gps"></span>✅ Job allocated! Pickup: ' + currentJob?.pubName;
             updateJobStatus(jobId, 'allocated');
-            // === SHOW JOB-WON MODAL + TTS ===
             const modal = document.getElementById('jobWonModal');
             modal.style.display = 'flex';
             if ('speechSynthesis' in window) {
