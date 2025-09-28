@@ -624,8 +624,8 @@ document.addEventListener('DOMContentLoaded', () => {
   let retryCount = 0;
   const MAX_RETRIES = 5;
 
-  // ===== BLACK CAB MARKER =====
-const BLACK_CAB_SVG = `
+  // ===== BLACK CAB MARKER (NEW SVG WITH "TAXI" TEXT) =====
+  const BLACK_CAB_SVG = `
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 36" width="64" height="36">
   <!-- Car body -->
   <rect x="4" y="14" width="56" height="14" rx="3" ry="3" fill="#000"/>
@@ -635,6 +635,11 @@ const BLACK_CAB_SVG = `
   
   <!-- Taxi light (yellow) -->
   <rect x="28" y="4" width="8" height="3" rx="1" fill="#FFD700" stroke="#000" stroke-width="0.5"/>
+  
+  <!-- Taxi light text -->
+  <text x="32" y="6.6" text-anchor="middle" font-size="2.2" font-weight="bold" fill="#000" font-family="Arial, sans-serif">
+    TAXI
+  </text>
   
   <!-- Windows -->
   <rect x="23" y="7" width="7" height="6" rx="1" fill="#fff"/>
@@ -646,11 +651,15 @@ const BLACK_CAB_SVG = `
 </svg>
 `;
   function createBlackCabIcon(heading = 0) {
-    const svgUrl = 'image/svg+xml;base64,' + btoa(BLACK_CAB_SVG);
+    const iconDiv = document.createElement('div');
+    iconDiv.innerHTML = BLACK_CAB_SVG;
+    const svg = iconDiv.firstChild;
+    svg.style.transform = `rotate(${heading}deg)`;
+    svg.style.transformOrigin = 'center';
     return L.divIcon({
-      html: `<img src="${svgUrl}" style="width:36px; height:36px; transform: rotate(${heading}deg);">`,
-      iconSize: [36, 36],
-      iconAnchor: [18, 18]
+      html: svg.outerHTML,
+      iconSize: [64, 36],
+      iconAnchor: [32, 18]
     });
   }
 
