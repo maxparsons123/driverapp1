@@ -2,8 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Black Cab Unite v1.0.2</title>
+  <title>Black Cab Unite v1.0.4</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <!-- ✅ Prevent caching — auto-reload on new version -->
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
   <style>
     body { 
@@ -482,7 +486,7 @@
 <body>
   <div id="map"></div>
   <div id="headerBanner">
-    <div id="appTitle">Black Cab Unite v1.0.2</div>
+    <div id="appTitle">Black Cab Unite v1.0.4</div>
     <button id="menuBtn">☰</button>
   </div>
   <div id="status">Initializing...</div>
@@ -629,12 +633,49 @@ document.addEventListener('DOMContentLoaded', () => {
 </svg>
 `;
   function createBlackCabIcon(heading = 0) {
-    const svgUrl = 'data:image/svg+xml;base64,' + btoa(BLACK_CAB_SVG);
+    const svgUrl = 'image/svg+xml;base64,' + btoa(BLACK_CAB_SVG);
     return L.divIcon({
       html: `<img src="${svgUrl}" style="width:36px; height:36px; transform: rotate(${heading}deg);">`,
       iconSize: [36, 36],
       iconAnchor: [18, 18]
     });
+  }
+
+  // ===== FUZZY LOGIC FOR SPEECH DETECTION =====
+  function detectJobResponse(transcript) {
+    const text = transcript.toLowerCase().trim();
+    
+    // Acceptance keywords and phrases
+    const acceptKeywords = [
+      'accept', 'yes', 'yeah', 'yep', 'sure', 'okay', 'ok', 'take it', 
+      'i want', 'i will', 'i can', 'lets go', 'let me', 'sounds good',
+      'i accept', 'can i accept', 'will accept', 'take that', 'take the job',
+      'go for it', 'do it', 'lets do it', 'i am in', 'count me in'
+    ];
+    
+    // Rejection keywords and phrases
+    const rejectKeywords = [
+      'reject', 'no', 'nope', 'pass', 'skip', 'dont want', 'do not want',
+      'not interested', 'cant do', 'cannot do', 'too far', 'busy',
+      'i reject', 'reject that', 'reject the job', 'not taking',
+      'not today', 'maybe later', 'not now', 'decline', 'refuse'
+    ];
+    
+    // Check for acceptance
+    for (const keyword of acceptKeywords) {
+      if (text.includes(keyword)) {
+        return 'accept';
+      }
+    }
+    
+    // Check for rejection
+    for (const keyword of rejectKeywords) {
+      if (text.includes(keyword)) {
+        return 'reject';
+      }
+    }
+    
+    return 'unknown';
   }
 
   // ===== CLEANUP FUNCTION =====
@@ -645,8 +686,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     // Stop mic
     stopVoiceListener();
-    // Release wake lock
-    releaseWakeLock();
     // Clear timer
     if (currentJobTimer) {
       clearInterval(currentJobTimer);
@@ -733,6 +772,10 @@ document.addEventListener('DOMContentLoaded', () => {
       icon: createBlackCabIcon(0)
     }).addTo(map);
     statusEl.innerHTML = '<span class="gps-source gps-poor"></span>Map loaded. Getting location...';
+
+    // ✅ REQUEST WAKE LOCK ONCE — KEEP SCREEN ON FOREVER WHILE APP IS OPEN
+    requestWakeLock();
+
     initGPS();
   }
 
@@ -745,8 +788,6 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
     statusEl.innerHTML = '<span class="gps-source gps-poor"></span>Searching for GPS...';
-    // Initial wake lock for app (optional)
-    requestWakeLock();
     gpsWatchId = navigator.geolocation.watchPosition(
       pos => {
         const gpsData = {
@@ -1144,16 +1185,19 @@ document.addEventListener('DOMContentLoaded', () => {
       showMicIndicator();
     };
     speechRecognition.onresult = (event) => {
-      const transcript = event.results[0][0].transcript.toLowerCase().trim();
-      if (/\baccept\b/.test(transcript) && !/\breject\b/.test(transcript)) {
-        cleanupJobState(); // ✅ CLEAN UP BEFORE RESPONDING
+      const transcript = event.results[0][0].transcript;
+      const response = detectJobResponse(transcript);
+      
+      if (response === 'accept') {
+        cleanupJobState();
         respondToJob(true);
         speakFeedback("Job accepted. Thank you.");
-      } else if (/\breject\b/.test(transcript)) {
-        cleanupJobState(); // ✅ CLEAN UP BEFORE RESPONDING
+      } else if (response === 'reject') {
+        cleanupJobState();
         respondToJob(false);
         speakFeedback("Job rejected. Understood.");
       }
+      // If 'unknown', keep listening
     };
     speechRecognition.onerror = (e) => {
       if (e.error !== 'aborted') {
@@ -1226,9 +1270,6 @@ document.addEventListener('DOMContentLoaded', () => {
           pickupLocation.textContent = `${data.pubName} (${data.lat.toFixed(5)}, ${data.lng.toFixed(5)})`;
           customerPhone.textContent = data.customerPhone;
           jobPanel.style.display = 'block';
-
-          // ✅ REQUEST WAKE LOCK FOR NEW JOB
-          requestWakeLock();
 
           addJobToHistory(data, 'processing');
 
