@@ -634,9 +634,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const loadingOverlay = document.getElementById('loadingOverlay');
   const micIndicator = document.getElementById('micIndicator');
 
-function createBlackCabIcon(heading = 0) {
-  // Use clean SVG from v5.1 (with "TAXI" text)
-  const BLACK_CAB_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 58 36" width="58" height="36">
+  const BLACK_CAB_SVG = `
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 58 36" width="58" height="36">
   <rect x="4" y="14" width="50" height="14" rx="3" ry="3" fill="#000"/>
   <path d="M18 14v-4c0-3 2-5 5-5h12c3 0 5 2 5 5v4h-22z" fill="#000"/>
   <rect x="25" y="4" width="8" height="3" rx="1" fill="#FFD700" stroke="#000" stroke-width="0.5"/>
@@ -645,19 +644,23 @@ function createBlackCabIcon(heading = 0) {
   <rect x="31" y="7" width="6" height="6" rx="1" fill="#fff"/>
   <circle cx="15" cy="28" r="4" fill="#fff" stroke="#000" stroke-width="1"/>
   <circle cx="43" cy="28" r="4" fill="#fff" stroke="#000" stroke-width="1"/>
-</svg>`;
+</svg>
+`;
+  function createBlackCabIcon(heading = 0) {
+    const div = document.createElement('div');
+    div.innerHTML = BLACK_CAB_SVG;
+    const svg = div.firstElementChild;
+    svg.style.transform = `rotate(${heading}deg)`;
+    svg.style.transformOrigin = 'center';
+    return L.divIcon({
+      html: svg.outerHTML,
+      iconSize: [58, 36],
+      iconAnchor: [29, 18],
+      className: 'taxi-marker'
+    });
+  }
+
   
-  // ✅ URL-encode instead of base64
-  const encoded = encodeURIComponent(BLACK_CAB_SVG.replace(/\s+/g, ' '));
-  const dataUrl = `image/svg+xml;charset=UTF-8,${encoded}`;
-  
-  return L.divIcon({
-    html: `<img src="${dataUrl}" style="width:58px; height:36px; transform: rotate(${heading}deg); transform-origin: center;">`,
-    iconSize: [58, 36],
-    iconAnchor: [29, 18],
-    className: 'taxi-marker'
-  });
-}
 
   // ===== SAVE PENDING JOBS =====
   function savePendingJobs() {
@@ -1575,6 +1578,7 @@ function createBlackCabIcon(heading = 0) {
   </script>
 </body>
 </html>
+
 
 
 
