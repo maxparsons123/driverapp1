@@ -634,7 +634,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const loadingOverlay = document.getElementById('loadingOverlay');
   const micIndicator = document.getElementById('micIndicator');
 
-  // ===== ENHANCED TAXI MARKER (ROBUST SVG) =====
   const BLACK_CAB_SVG = `
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 58 36" width="58" height="36">
   <rect x="4" y="14" width="50" height="14" rx="3" ry="3" fill="#000"/>
@@ -648,10 +647,13 @@ document.addEventListener('DOMContentLoaded', () => {
 </svg>
 `;
   function createBlackCabIcon(heading = 0) {
-    const encoded = encodeURIComponent(BLACK_CAB_SVG.replace(/\s+/g, ' '));
-    const dataUrl = `image/svg+xml;charset=UTF-8,${encoded}`;
+    const div = document.createElement('div');
+    div.innerHTML = BLACK_CAB_SVG;
+    const svg = div.firstElementChild;
+    svg.style.transform = `rotate(${heading}deg)`;
+    svg.style.transformOrigin = 'center';
     return L.divIcon({
-      html: `<img src="${dataUrl}" style="width:58px; height:36px; transform: rotate(${heading}deg); transform-origin: center;">`,
+      html: svg.outerHTML,
       iconSize: [58, 36],
       iconAnchor: [29, 18],
       className: 'taxi-marker'
@@ -1574,5 +1576,6 @@ document.addEventListener('DOMContentLoaded', () => {
   </script>
 </body>
 </html>
+
 
 
