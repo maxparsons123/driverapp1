@@ -625,6 +625,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ✅ GLOBAL TIMER REFERENCE (PREVENT LEAKS)
   let jobTimerInterval = null;
+  // ✅ JOB WAKE LOCK
+  let jobWakeLock = null;
 
   const statusEl = document.getElementById('status');
   const jobPanel = document.getElementById('jobPanel');
@@ -1327,6 +1329,21 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
       startVoiceListener();
     }
+
+    // ✅ PREVENT SCREEN SLEEP DURING JOB OFFER
+    async function requestJobWakeLock() {
+      if ('wakeLock' in navigator) {
+        try {
+          jobWakeLock = await navigator.wakeLock.request('screen');
+          jobWakeLock.addEventListener('release', () => {
+            jobWakeLock = null;
+          });
+        } catch (err) {
+          console.warn('Job Wake Lock failed:', err);
+        }
+      }
+    }
+    requestJobWakeLock();
   }
 
   function cleanupJob() {
@@ -1340,6 +1357,11 @@ document.addEventListener('DOMContentLoaded', () => {
     isJobActive = false;
     if (pickupMarker) { map.removeLayer(pickupMarker); pickupMarker = null; }
     if (routeLine) { map.removeLayer(routeLine); routeLine = null; }
+    // ✅ RELEASE JOB WAKE LOCK
+    if (jobWakeLock) {
+      jobWakeLock.release();
+      jobWakeLock = null;
+    }
   }
 
   function respondToJob(accepted) {
@@ -1562,4 +1584,3 @@ document.addEventListener('DOMContentLoaded', () => {
   </script>
 </body>
 </html>
-
