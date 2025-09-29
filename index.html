@@ -2,10 +2,11 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Black Cab Unite</title>
+  <title>Black Cab Unite v5.2</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
   <style>
+    /* ... (your full CSS from v5.1 remains unchanged) ... */
     body { 
       margin:0; 
       font-family:system-ui, -apple-system, "Segoe UI", sans-serif; 
@@ -477,12 +478,18 @@
       color: #666;
       line-height: 1.5;
     }
+    /* ✅ REMOVE WHITE BOX AROUND TAXI MARKER */
+    .taxi-marker {
+      background: transparent !important;
+      border: none !important;
+      box-shadow: none !important;
+    }
   </style>
 </head>
 <body>
   <div id="map"></div>
   <div id="headerBanner">
-    <div id="appTitle">Black Cab Unite</div>
+    <div id="appTitle">Black Cab Unite v5.2</div>
     <button id="menuBtn">☰</button>
   </div>
   <div id="status">Initializing...</div>
@@ -582,13 +589,17 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   document.body.addEventListener('click', initTTS, { once: true });
   document.body.addEventListener('touchstart', initTTS, { once: true });
-  const MQTT_BROKER = "wss://broker.hivemq.com:8884/mqtt"; 
+
+  // ✅ FIXED MQTT BROKER (MOST RELIABLE FOR BROWSER)
+  const MQTT_BROKER = "ws://broker.hivemq.com:8000/mqtt";
+
   const REQUEST_TOPIC = "pubs/requests/+";
   const LOCATION_TOPIC = `drivers/${DRIVER_ID}/location`;
   const DRIVERS_LOCATION_TOPIC = "drivers/+/location";
   const CHAT_GROUP_TOPIC = "chat/group";
   const CHAT_PRIVATE_TOPIC = `chat/private/${DRIVER_ID}/+`;
   const JOB_RESULT_TOPIC = `jobs/+/result/${DRIVER_ID}`;
+
   let driverCoords = null;
   let map = null;
   let driverMarker = null;
@@ -601,11 +612,16 @@ document.addEventListener('DOMContentLoaded', () => {
   let currentView = 'currentJob';
   let gpsWatchId = null;
   let wakeLock = null;
+
   const otherDrivers = {};
   const driverStatus = {};
   const chatMessages = { group: JSON.parse(localStorage.getItem(`chat_group_${DRIVER_ID}`)) || [] };
   const unreadCounts = { group: 0 };
   let driverJobs = JSON.parse(localStorage.getItem(`driver_jobs_${DRIVER_ID}`)) || [];
+  let pendingJobs = JSON.parse(localStorage.getItem(`pending_jobs_${DRIVER_ID}`)) || [];
+  let maxRadius = parseFloat(localStorage.getItem('max_radius_km') || '10');
+  let isJobActive = false;
+
   const statusEl = document.getElementById('status');
   const jobPanel = document.getElementById('jobPanel');
   const pickupLocation = document.getElementById('pickupLocation');
@@ -615,22 +631,39 @@ document.addEventListener('DOMContentLoaded', () => {
   const menuNavBtns = document.querySelectorAll('.menu-nav-btn');
   const loadingOverlay = document.getElementById('loadingOverlay');
   const micIndicator = document.getElementById('micIndicator');
-  // ===== BLACK CAB MARKER =====
+
+  // ===== ENHANCED TAXI MARKER (from v5.1) =====
   const BLACK_CAB_SVG = `
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="36" height="36">
-  <path fill="#000" d="M18 4H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zM6 6h12v2H6V6zm0 10V9h12v7H6z"/>
-  <circle cx="8" cy="14" r="1.5" fill="#fff"/>
-  <circle cx="16" cy="14" r="1.5" fill="#fff"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 58 36" width="58" height="36">
+  <rect x="4" y="14" width="50" height="14" rx="3" ry="3" fill="#000"/>
+  <path d="M18 14v-4c0-3 2-5 5-5h12c3 0 5 2 5 5v4h-22z" fill="#000"/>
+  <rect x="25" y="4" width="8" height="3" rx="1" fill="#FFD700" stroke="#000" stroke-width="0.5"/>
+  <text x="29" y="6.6" text-anchor="middle" font-size="2.2" font-weight="bold" fill="#000" font-family="Arial, sans-serif">TAXI</text>
+  <rect x="21" y="7" width="6" height="6" rx="1" fill="#fff"/>
+  <rect x="31" y="7" width="6" height="6" rx="1" fill="#fff"/>
+  <circle cx="15" cy="28" r="4" fill="#fff" stroke="#000" stroke-width="1"/>
+  <circle cx="43" cy="28" r="4" fill="#fff" stroke="#000" stroke-width="1"/>
 </svg>
 `;
   function createBlackCabIcon(heading = 0) {
-    const svgUrl = 'data:image/svg+xml;base64,' + btoa(BLACK_CAB_SVG);
+    const div = document.createElement('div');
+    div.innerHTML = BLACK_CAB_SVG;
+    const svg = div.firstElementChild;
+    svg.style.transform = `rotate(${heading}deg)`;
+    svg.style.transformOrigin = 'center';
     return L.divIcon({
-      html: `<img src="${svgUrl}" style="width:36px; height:36px; transform: rotate(${heading}deg);">`,
-      iconSize: [36, 36],
-      iconAnchor: [18, 18]
+      html: svg.outerHTML,
+      iconSize: [58, 36],
+      iconAnchor: [29, 18],
+      className: 'taxi-marker'
     });
   }
+
+  // ===== SAVE PENDING JOBS =====
+  function savePendingJobs() {
+    localStorage.setItem(`pending_jobs_${DRIVER_ID}`, JSON.stringify(pendingJobs));
+  }
+
   // ===== SIMPLE GPS (STABLE) =====
   function calculateDistance(lat1, lon1, lat2, lon2) {
     const R = 6371000;
@@ -641,17 +674,20 @@ document.addEventListener('DOMContentLoaded', () => {
     const a = Math.sin(Δφ/2)**2 + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ/2)**2;
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   }
+
   function updateDriverMarker(lat, lng, headingValue) {
     if (!driverMarker) return;
     driverMarker.setLatLng([lat, lng]);
     driverMarker.setIcon(createBlackCabIcon(headingValue));
   }
+
   function updateMapCenter(lat, lng) {
     if (!map) return;
     const center = map.getCenter();
     const dist = calculateDistance(center.lat, center.lng, lat, lng);
     if (dist > 50) map.panTo([lat, lng]);
   }
+
   let lastPublish = 0;
   let lastPublishCoords = null;
   function publishLocationThrottled(gpsData) {
@@ -671,6 +707,7 @@ document.addEventListener('DOMContentLoaded', () => {
       lastPublishCoords = { lat: gpsData.lat, lng: gpsData.lng };
     }
   }
+
   // ===== WAKE LOCK =====
   async function requestWakeLock() {
     try {
@@ -681,12 +718,14 @@ document.addEventListener('DOMContentLoaded', () => {
       console.warn('Wake Lock failed:', err);
     }
   }
+
   function releaseWakeLock() {
     if (wakeLock) {
       wakeLock.release();
       wakeLock = null;
     }
   }
+
   // ===== MAP INIT =====
   function initMapImmediately() {
     loadingOverlay.style.display = 'none';
@@ -703,6 +742,7 @@ document.addEventListener('DOMContentLoaded', () => {
     statusEl.innerHTML = '<span class="gps-source gps-poor"></span>Map loaded. Getting location...';
     initGPS();
   }
+
   // ===== SIMPLE GPS INIT =====
   function initGPS() {
     if (!('geolocation' in navigator)) {
@@ -747,6 +787,7 @@ document.addEventListener('DOMContentLoaded', () => {
     );
     connectMQTT();
   }
+
   // ===== MENU NAVIGATION =====
   function toggleMenu() {
     isMenuOpen = !isMenuOpen;
@@ -757,6 +798,7 @@ document.addEventListener('DOMContentLoaded', () => {
       menuPanel.classList.remove('active');
     }
   }
+
   function switchView(view) {
     currentView = view;
     menuNavBtns.forEach(btn => {
@@ -768,6 +810,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     renderCurrentView();
   }
+
   function renderCurrentView() {
     if (!isMenuOpen) return;
     if (currentView === 'currentJob') {
@@ -780,6 +823,7 @@ document.addEventListener('DOMContentLoaded', () => {
       renderSettingsView();
     }
   }
+
   // ===== CURRENT JOB VIEW =====
   function renderCurrentJob() {
     const allocatedJobs = driverJobs.filter(job => job.status === 'allocated');
@@ -828,10 +872,12 @@ document.addEventListener('DOMContentLoaded', () => {
       </div>
     `;
   }
+
   // ===== JOB HISTORY MANAGEMENT =====
   function saveJobs() {
     localStorage.setItem(`driver_jobs_${DRIVER_ID}`, JSON.stringify(driverJobs));
   }
+
   function addJobToHistory(jobData, initialStatus = 'processing') {
     const job = {
       ...jobData,
@@ -852,6 +898,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (isMenuOpen && currentView === 'jobHistory') renderJobHistory();
     if (isMenuOpen && currentView === 'currentJob') renderCurrentJob();
   }
+
   function updateJobStatus(jobId, status) {
     const jobIndex = driverJobs.findIndex(j => j.job === jobId);
     if (jobIndex >= 0) {
@@ -861,6 +908,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (isMenuOpen && currentView === 'currentJob') renderCurrentJob();
     }
   }
+
   function renderJobHistory() {
     menuContent.innerHTML = '';
     if (driverJobs.length === 0) {
@@ -875,6 +923,10 @@ document.addEventListener('DOMContentLoaded', () => {
       const date = new Date(job.timestamp);
       const timeStr = date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
       const dateStr = date.toLocaleDateString();
+      let viewButton = '';
+      if (job.status === 'pending') {
+        viewButton = `<button class="settings-btn view-pending-btn" data-jobid="${job.job}" style="margin-top:10px; padding:8px; font-size:14px;">View Job Offer</button>`;
+      }
       jobEl.innerHTML = `
         <div class="job-id">${job.job}</div>
         <div class="job-pub">Pub: ${job.pubName}</div>
@@ -884,11 +936,25 @@ document.addEventListener('DOMContentLoaded', () => {
           <span class="job-status status-${job.status}">${job.status.toUpperCase()}</span>
           <span style="font-size:12px; color:#666;">${dateStr} ${timeStr}</span>
         </div>
+        ${viewButton}
       `;
       jobsContainer.appendChild(jobEl);
     });
     menuContent.appendChild(jobsContainer);
+    // Add click handlers for pending jobs
+    menuContent.querySelectorAll('.view-pending-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const jobId = e.target.dataset.jobid;
+        const job = pendingJobs.find(j => j.job === jobId);
+        if (job && !isJobActive) {
+          showJobPanel(job);
+        } else {
+          alert("Please finish the current job first.");
+        }
+      });
+    });
   }
+
   // ===== CHAT FUNCTIONS =====
   function renderChatView() {
     menuContent.innerHTML = `
@@ -903,8 +969,8 @@ document.addEventListener('DOMContentLoaded', () => {
             ${unreadCounts.group > 0 ? `<div class="unread-badge">${unreadCounts.group}</div>` : ''}
           </div>
         </div>
-        <div id="chatMessages" style="display:none; flex:1; padding:16px; overflow-y:auto; display:flex; flex-direction:column; gap:12px;"></div>
-        <div id="chatInputContainer" style="display:none; padding:12px; background:white; border-top:1px solid #eee;">
+        <div id="chatMessages" style="flex:1; padding:16px; overflow-y:auto; display:flex; flex-direction:column; gap:12px;"></div>
+        <div id="chatInputContainer" style="padding:12px; background:white; border-top:1px solid #eee;">
           <input type="text" id="chatInput" placeholder="Type a message..." autocomplete="off" style="flex:1; padding:14px; border:2px solid #ddd; border-radius:24px; font-size:16px;">
           <button id="sendBtn" style="background:#000; color:#FFD700; border:none; width:52px; height:52px; border-radius:50%; margin-left:12px; cursor:pointer; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:20px; box-shadow:0 2px 8px rgba(0,0,0,0.2);">➤</button>
         </div>
@@ -913,7 +979,6 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('chatList').addEventListener('click', (e) => {
       const contact = e.target.closest('.contact-item');
       if (contact) {
-        e.stopPropagation(); // 👈 FIX: Prevent menu close
         const chatId = contact.dataset.chat;
         openChat(chatId);
       }
@@ -924,6 +989,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     updateChatList();
   }
+
   function openChat(chatId) {
     currentChat = chatId;
     document.getElementById('chatList').style.display = 'none';
@@ -934,6 +1000,7 @@ document.addEventListener('DOMContentLoaded', () => {
     renderChatMessages();
     document.getElementById('chatInput').focus();
   }
+
   function renderChatMessages() {
     const chatMessagesEl = document.getElementById('chatMessages');
     chatMessagesEl.innerHTML = '';
@@ -952,6 +1019,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
   }
+
   function updateChatList() {
     const chatList = document.getElementById('chatList');
     chatList.innerHTML = `
@@ -982,6 +1050,7 @@ document.addEventListener('DOMContentLoaded', () => {
       chatList.appendChild(contactEl);
     });
   }
+
   function sendChatMessage() {
     const chatInput = document.getElementById('chatInput');
     const text = chatInput.value.trim();
@@ -996,6 +1065,7 @@ document.addEventListener('DOMContentLoaded', () => {
     addMessage(currentChat, DRIVER_ID, text);
     chatInput.value = '';
   }
+
   function addMessage(chatId, sender, text, timestamp = Date.now()) {
     if (!chatMessages[chatId]) {
       chatMessages[chatId] = [];
@@ -1014,12 +1084,14 @@ document.addEventListener('DOMContentLoaded', () => {
       renderChatMessages();
     }
   }
+
   function saveChatMessages() {
     if (currentChat) {
       localStorage.setItem(`chat_${currentChat}_${DRIVER_ID}`, JSON.stringify(chatMessages[currentChat] || []));
     }
     localStorage.setItem(`chat_group_${DRIVER_ID}`, JSON.stringify(chatMessages.group || []));
   }
+
   // ===== SETTINGS VIEW =====
   function renderSettingsView() {
     menuContent.innerHTML = `
@@ -1030,6 +1102,11 @@ document.addEventListener('DOMContentLoaded', () => {
         <div class="settings-info">
           Your current ID: <span id="currentDriverId">${DRIVER_ID}</span>
         </div>
+      </div>
+      <div class="settings-group">
+        <div class="settings-label">Max Job Radius (km)</div>
+        <input type="number" id="maxRadiusInput" class="settings-input" value="${maxRadius}" min="1" max="50" step="1">
+        <button class="settings-btn" id="saveRadiusBtn">Save Radius</button>
       </div>
       <div class="settings-group">
         <div class="settings-label">Clear Job History</div>
@@ -1055,16 +1132,30 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       statusEl.innerHTML = `<span class="gps-source gps-gps"></span>✅ Driver ID updated to: ${newId}`;
     });
+    document.getElementById('saveRadiusBtn').addEventListener('click', () => {
+      const val = document.getElementById('maxRadiusInput').value;
+      const radius = parseFloat(val);
+      if (isNaN(radius) || radius < 1 || radius > 50) {
+        alert("Please enter a radius between 1 and 50 km");
+        return;
+      }
+      maxRadius = radius;
+      localStorage.setItem('max_radius_km', radius.toString());
+      statusEl.innerHTML = `✅ Max radius set to ${radius} km`;
+    });
     document.getElementById('clearJobsBtn').addEventListener('click', () => {
       if (confirm("Are you sure you want to clear all job history?")) {
         driverJobs = [];
+        pendingJobs = [];
         saveJobs();
+        savePendingJobs();
         if (isMenuOpen && currentView === 'jobHistory') renderJobHistory();
         if (isMenuOpen && currentView === 'currentJob') renderCurrentJob();
         statusEl.innerHTML = '<span class="gps-source gps-network"></span>✅ Job history cleared';
       }
     });
   }
+
   // ===== MARK JOB COMPLETED =====
   window.markJobCompleted = function(jobId) {
     const payload = { job: jobId, driver: DRIVER_ID, status: "completed", ts: Date.now() };
@@ -1072,6 +1163,7 @@ document.addEventListener('DOMContentLoaded', () => {
     updateJobStatus(jobId, 'completed');
     statusEl.innerHTML = '<span class="gps-source gps-gps"></span>✅ Job marked as completed';
   };
+
   // ===== GET COLOR FOR DRIVER =====
   function getColorForDriver(driverId) {
     let hash = 0;
@@ -1081,18 +1173,22 @@ document.addEventListener('DOMContentLoaded', () => {
     const c = (hash & 0x00FFFFFF).toString(16).toUpperCase();
     return "#" + "00000".substring(0, 6 - c.length) + c;
   }
-  // ===== VOICE LISTENER WITH MIC INDICATOR =====
+
+  // ===== VOICE LISTENER (MERGED STABLE VERSION) =====
   let speechRecognition = null;
   let retryCount = 0;
   const MAX_RETRIES = 5;
+
   function showMicIndicator() {
     micIndicator.style.display = 'block';
   }
+
   function hideMicIndicator() {
     micIndicator.style.display = 'none';
   }
+
   function startVoiceListener() {
-    // ✅ FIX: Prevent multiple instances
+    // ✅ PREVENT MULTIPLE INSTANCES (from latest file)
     if (speechRecognition) {
       return;
     }
@@ -1130,8 +1226,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     speechRecognition.onend = () => {
       hideMicIndicator();
-      // ✅ FIX: No auto-restart — stable behavior
-      speechRecognition = null;
+      speechRecognition = null; // ✅ Clean reset
     };
     try {
       speechRecognition.start();
@@ -1140,6 +1235,7 @@ document.addEventListener('DOMContentLoaded', () => {
       speechRecognition = null;
     }
   }
+
   function stopVoiceListener() {
     hideMicIndicator();
     if (speechRecognition) {
@@ -1147,6 +1243,7 @@ document.addEventListener('DOMContentLoaded', () => {
       speechRecognition = null;
     }
   }
+
   function speakFeedback(message) {
     if (!('speechSynthesis' in window)) return;
     const utterance = new SpeechSynthesisUtterance(message);
@@ -1161,6 +1258,77 @@ document.addEventListener('DOMContentLoaded', () => {
     speechSynthesis.cancel();
     speechSynthesis.speak(utterance);
   }
+
+  // ===== JOB QUEUE LOGIC (from v5.1) =====
+  function processPendingJobs() {
+    if (isJobActive || pendingJobs.length === 0) return;
+    const now = Date.now();
+    pendingJobs = pendingJobs.filter(job => (now - job.receivedAt) < 30000);
+    savePendingJobs();
+    if (pendingJobs.length === 0) return;
+    const job = pendingJobs.shift();
+    savePendingJobs();
+    showJobPanel(job);
+  }
+
+  function showJobPanel(job) {
+    isJobActive = true;
+    currentJob = job;
+    pickupLocation.textContent = `${job.pubName} (${job.lat.toFixed(5)}, ${job.lng.toFixed(5)})`;
+    customerPhone.textContent = job.customerPhone;
+    jobPanel.style.display = 'block';
+    let secondsLeft = 30;
+    const timerInterval = setInterval(() => {
+      secondsLeft--;
+      document.getElementById('timerSeconds').textContent = secondsLeft;
+      if (secondsLeft <= 0) {
+        clearInterval(timerInterval);
+        cleanupJob();
+        processPendingJobs();
+      }
+    }, 1000);
+    if ('speechSynthesis' in window) {
+      const u = new SpeechSynthesisUtterance(`New job! Pickup at ${job.pubName}. Customer phone: ${job.customerPhone}`);
+      u.lang = 'en-GB'; u.rate = 0.9;
+      u.onend = () => startVoiceListener();
+      speechSynthesis.speak(u);
+    } else {
+      startVoiceListener();
+    }
+  }
+
+  function cleanupJob() {
+    jobPanel.style.display = 'none';
+    stopVoiceListener();
+    currentJob = null;
+    isJobActive = false;
+    if (pickupMarker) { map.removeLayer(pickupMarker); pickupMarker = null; }
+    if (routeLine) { map.removeLayer(routeLine); routeLine = null; }
+  }
+
+  function respondToJob(accepted){
+    if(!currentJob || !client) return;
+    const job = currentJob;
+    // Remove from pending
+    pendingJobs = pendingJobs.filter(j => j.job !== job.job);
+    savePendingJobs();
+    if(accepted){
+      let bidLat = driverCoords?.lat || job.lat;
+      let bidLng = driverCoords?.lng || job.lng;
+      const payload = { driver: DRIVER_ID, lat: bidLat, lng: bidLng };
+      client.publish(`jobs/${job.job}/accept`, JSON.stringify(payload));
+      statusEl.innerHTML = '✅ Bid sent';
+      updateJobStatus(job.job, 'bidding');
+    } else {
+      const payload = { job: job.job, driver: DRIVER_ID, status: "rejected", ts:Date.now() };
+      client.publish(`jobs/${job.job}/status`, JSON.stringify(payload));
+      statusEl.innerHTML = '❌ Job rejected';
+      updateJobStatus(job.job, 'rejected');
+    }
+    cleanupJob();
+    processPendingJobs();
+  }
+
   // ===== MQTT =====
   function connectMQTT(){
     statusEl.innerHTML = `<span class="gps-source gps-poor"></span>Connecting to MQTT as: ${DRIVER_ID}`;
@@ -1177,67 +1345,57 @@ document.addEventListener('DOMContentLoaded', () => {
       client.subscribe(CHAT_PRIVATE_TOPIC);
       client.subscribe(JOB_RESULT_TOPIC);
       setInterval(cleanupOldDrivers, 30000);
+      // Auto-clean expired pending jobs
+      setInterval(() => {
+        const now = Date.now();
+        let changed = false;
+        pendingJobs = pendingJobs.filter(job => {
+          if (now - job.receivedAt >= 30000) {
+            updateJobStatus(job.job, 'expired');
+            changed = true;
+            return false;
+          }
+          return true;
+        });
+        if (changed) savePendingJobs();
+      }, 10000);
     });
     client.on('message', (topic, message)=>{ 
       try{
         const data = JSON.parse(message.toString());
         if(topic.startsWith("pubs/requests/")){
-          currentJob = data;
-          pickupLocation.textContent = `${data.pubName} (${data.lat.toFixed(5)}, ${data.lng.toFixed(5)})`;
-          customerPhone.textContent = data.customerPhone;
-          jobPanel.style.display = 'block';
-          addJobToHistory(data, 'processing');
-
-          // === START 30-SECOND TIMER ===
-          const timerEl = document.getElementById('jobTimer');
-          const secondsEl = document.getElementById('timerSeconds');
-          timerEl.style.display = 'block';
-          secondsEl.textContent = '30';
-          let secondsLeft = 30;
-          const timerInterval = setInterval(() => {
-            secondsLeft--;
-            secondsEl.textContent = secondsLeft;
-            if (secondsLeft <= 0) {
-              clearInterval(timerInterval);
-              jobPanel.style.display = 'none';
-              stopVoiceListener();
-              currentJob = null;
-              statusEl.innerHTML = '<span class="gps-source gps-poor"></span>⏰ Job expired';
+          // Radius filter
+          if (driverCoords) {
+            const dist = calculateDistance(driverCoords.lat, driverCoords.lng, data.lat, data.lng);
+            if (dist > maxRadius * 1000) {
+              client.publish(`jobs/${data.job}/status`, JSON.stringify({
+                job: data.job,
+                driver: DRIVER_ID,
+                status: "rejected",
+                reason: "out_of_radius",
+                ts: Date.now()
+              }));
+              addJobToHistory(data, 'rejected');
+              return;
             }
-          }, 1000);
-
-          // === TTS FOR JOB OFFER ===
-          if ('speechSynthesis' in window) {
-            const utterance = new SpeechSynthesisUtterance(
-              `New job! Pickup at ${data.pubName}. Customer phone: ${data.customerPhone}`
-            );
-            utterance.lang = 'en-GB';
-            utterance.rate = 0.9;
-            utterance.onend = () => {
-              // ✅ Start mic ONLY after TTS ends
-              if (jobPanel.style.display === 'block') {
-                startVoiceListener();
-              }
-            };
-            speechSynthesis.cancel();
-            speechSynthesis.speak(utterance);
-          } else {
-            startVoiceListener();
           }
+          // Add to pending
+          pendingJobs.push({ ...data, receivedAt: Date.now() });
+          savePendingJobs();
+          addJobToHistory(data, 'pending');
+          // Auto-process after short delay
+          setTimeout(processPendingJobs, 500);
         }
         if(topic.startsWith("jobs/") && topic.endsWith(`/result/${DRIVER_ID}`)){
           const jobId = topic.split('/')[1];
           if(data.result === "won"){
-            statusEl.innerHTML = '<span class="gps-source gps-gps"></span>✅ Job allocated! Pickup: ' + currentJob?.pubName;
+            statusEl.innerHTML = '<span class="gps-source gps-gps"></span>✅ Job allocated! Pickup: ' + (currentJob?.pubName || 'unknown');
             updateJobStatus(jobId, 'allocated');
-            // === SHOW JOB-WON MODAL + TTS ===
             const modal = document.getElementById('jobWonModal');
             modal.style.display = 'flex';
             if ('speechSynthesis' in window) {
-              const utterance = new SpeechSynthesisUtterance("Driver, you have won the job!");
+              const utterance = new SpeechSynthesisUtterance("You won the job!");
               utterance.lang = 'en-GB';
-              utterance.rate = 0.9;
-              speechSynthesis.cancel();
               speechSynthesis.speak(utterance);
             }
             document.getElementById('closeJobWonModal').onclick = () => {
@@ -1250,7 +1408,6 @@ document.addEventListener('DOMContentLoaded', () => {
             statusEl.innerHTML = '<span class="gps-source gps-poor"></span>⏰ Bid too late - job expired';
             updateJobStatus(jobId, 'expired');
           }
-          // ⚠️ REMOVED: "not_allowed"
           else if(data.result === "job_timeout"){
             statusEl.innerHTML = '<span class="gps-source gps-poor"></span>⏰ Job expired - no valid bids received';
             updateJobStatus(jobId, 'expired');
@@ -1262,7 +1419,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const validStatuses = ['allocated', 'completed', 'lost', 'rejected', 'no_drivers_responded', 'no_acceptance', 'no_valid_acceptance'];
             if (validStatuses.includes(data.status)) {
               if(data.status === "allocated"){
-                statusEl.innerHTML = '<span class="gps-source gps-gps"></span>✅ Job allocated! Pickup: ' + currentJob?.pubName;
+                statusEl.innerHTML = '<span class="gps-source gps-gps"></span>✅ Job allocated! Pickup: ' + (currentJob?.pubName || 'unknown');
                 updateJobStatus(jobId, 'allocated');
               } else if(data.status === "lost"){
                 statusEl.innerHTML = '<span class="gps-source gps-network"></span>❌ Bid lost. Better luck next time!';
@@ -1294,6 +1451,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   }
+
   function updateOtherDriverMarker(driverId, lat, lng, data) {
     const now = Date.now();
     if (!otherDrivers[driverId]) {
@@ -1318,6 +1476,7 @@ document.addEventListener('DOMContentLoaded', () => {
       otherDrivers[driverId].data = data;
     }
   }
+
   function cleanupOldDrivers() {
     const now = Date.now();
     const staleDrivers = [];
@@ -1334,35 +1493,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     if (isMenuOpen && currentView === 'chat') updateChatList();
   }
-  // ===== JOB RESPONSE =====
-  function respondToJob(accepted){
-    if(!currentJob || !client) return;
-    if(accepted){
-      let bidLat = driverCoords?.lat || currentJob.lat;
-      let bidLng = driverCoords?.lng || currentJob.lng;
-      // ✅ FIX: Complete bid payload for tablet
-      const payload = {
-        job: currentJob.job,
-        driver: DRIVER_ID,
-        lat: bidLat,
-        lng: bidLng,
-        timestamp: Date.now()
-      };
-      client.publish(`jobs/${currentJob.job}/accept`, JSON.stringify(payload));
-      statusEl.innerHTML = '<span class="gps-source gps-gps"></span>✅ Bid sent for job ' + currentJob.job;
-      updateJobStatus(currentJob.job, 'bidding');
-    } else {
-      const payload = { job: currentJob.job, driver: DRIVER_ID, status: "rejected", ts:Date.now() };
-      client.publish(`jobs/${currentJob.job}/status`, JSON.stringify(payload));
-      statusEl.innerHTML = '<span class="gps-source gps-network"></span>❌ Job rejected';
-      updateJobStatus(currentJob.job, 'rejected');
-    }
-    jobPanel.style.display = 'none';
-    stopVoiceListener();
-    if(pickupMarker){ map.removeLayer(pickupMarker); pickupMarker = null; }
-    if(routeLine){ map.removeLayer(routeLine); routeLine = null; }
-    currentJob = null;
-  }
+
   // ===== EVENT LISTENERS =====
   document.getElementById('acceptBtn').addEventListener('click', () => respondToJob(true));
   document.getElementById('rejectBtn').addEventListener('click', () => respondToJob(false));
@@ -1370,26 +1501,27 @@ document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('.menu-nav-btn').forEach(btn => {
     btn.addEventListener('click', () => switchView(btn.dataset.view));
   });
-  // ✅ FIX: Add stopPropagation for chat elements
-  document.getElementById('chatInputContainer').addEventListener('click', (e) => {
-    e.stopPropagation();
-  });
-  document.getElementById('sendBtn').addEventListener('click', (e) => {
-    e.stopPropagation();
-  });
-  document.getElementById('chatInput').addEventListener('focus', (e) => {
-    e.stopPropagation();
-  });
+
+  // ✅ NO EARLY LISTENERS FOR CHAT ELEMENTS (they don't exist yet)
+
   document.addEventListener('click', (e) => {
-    if (isMenuOpen && !menuPanel.contains(e.target) && e.target !== document.getElementById('menuBtn')) {
+    // Keep menu open if clicking inside chat or input
+    if (isMenuOpen && 
+        !menuPanel.contains(e.target) && 
+        e.target !== document.getElementById('menuBtn') &&
+        !e.target.closest('#chatMessages') &&
+        !e.target.closest('#chatInputContainer')
+    ) {
       isMenuOpen = false;
       menuPanel.classList.remove('active');
     }
   });
+
   window.addEventListener('beforeunload', () => {
     if (gpsWatchId) navigator.geolocation.clearWatch(gpsWatchId);
     releaseWakeLock();
   });
+
   initMapImmediately();
   renderCurrentJob();
 });
