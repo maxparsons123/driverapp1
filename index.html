@@ -621,6 +621,9 @@ document.addEventListener('DOMContentLoaded', () => {
   let maxRadius = parseFloat(localStorage.getItem('max_radius_km') || '10');
   let isJobActive = false;
 
+  // ✅ NEW: Global timer reference to prevent leaks
+  let jobTimerInterval = null;
+
   const statusEl = document.getElementById('status');
   const jobPanel = document.getElementById('jobPanel');
   const pickupLocation = document.getElementById('pickupLocation');
@@ -1275,28 +1278,40 @@ document.addEventListener('DOMContentLoaded', () => {
     showJobPanel(job);
   }
 
+  // ✅ CRITICAL: Clear old timer before showing new job
   function showJobPanel(job) {
+    // ✅ Clear any existing timer to prevent leaks
+    if (jobTimerInterval) {
+      clearInterval(jobTimerInterval);
+      jobTimerInterval = null;
+    }
+
     if (isJobActive) return;
     isJobActive = true;
     currentJob = job;
     pickupLocation.textContent = `${job.pubName} (${job.lat.toFixed(5)}, ${job.lng.toFixed(5)})`;
     customerPhone.textContent = job.customerPhone;
     jobPanel.style.display = 'block';
+
     // === START 30-SECOND TIMER ===
     const timerEl = document.getElementById('jobTimer');
     const secondsEl = document.getElementById('timerSeconds');
     timerEl.style.display = 'block';
     secondsEl.textContent = '30';
     let secondsLeft = 30;
-    const timerInterval = setInterval(() => {
+
+    // ✅ Store timer ID globally
+    jobTimerInterval = setInterval(() => {
       secondsLeft--;
       secondsEl.textContent = secondsLeft;
       if (secondsLeft <= 0) {
-        clearInterval(timerInterval);
+        clearInterval(jobTimerInterval);
+        jobTimerInterval = null; // ✅ Clear reference
         cleanupJob();
         processPendingJobs(); // ✅ Announce next job if available
       }
     }, 1000);
+
     // === TTS FOR JOB OFFER ===
     if ('speechSynthesis' in window) {
       const utterance = new SpeechSynthesisUtterance(
@@ -1318,7 +1333,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  // ✅ Also clear timer in cleanupJob() for safety
   function cleanupJob() {
+    // ✅ Clear timer if still running
+    if (jobTimerInterval) {
+      clearInterval(jobTimerInterval);
+      jobTimerInterval = null;
+    }
+
     jobPanel.style.display = 'none';
     stopVoiceListener(); // ✅ Stops mic & resets state
     currentJob = null;
