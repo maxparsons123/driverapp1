@@ -591,7 +591,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.body.addEventListener('click', initTTS, { once: true });
   document.body.addEventListener('touchstart', initTTS, { once: true });
 
-  // ✅ FIXED MQTT BROKER (MOST RELIABLE FOR BROWSER)
+  // ✅ KEEP 8884 AS REQUESTED (tablet compatibility)
   const MQTT_BROKER = "wss://broker.hivemq.com:8884/mqtt";
 
   const REQUEST_TOPIC = "pubs/requests/+";
@@ -874,10 +874,12 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function addJobToHistory(jobData, initialStatus = 'processing') {
+    // Preserve existing fields (like hasBeenAnnounced)
+    const existingJob = driverJobs.find(j => j.job === jobData.job);
     const job = {
       ...jobData,
       status: initialStatus,
-      timestamp: Date.now(),
+      timestamp: jobData.timestamp || Date.now(),
       driver: DRIVER_ID
     };
     const existingIndex = driverJobs.findIndex(j => j.job === job.job);
@@ -1244,7 +1246,7 @@ document.addEventListener('DOMContentLoaded', () => {
     speechSynthesis.speak(utterance);
   }
 
-  // ===== SHOW JOB PANEL (used by both modes) =====
+  // ===== SHOW JOB PANEL =====
   function showJobPanel(job) {
     if (isJobActive) return;
     isJobActive = true;
@@ -1343,11 +1345,20 @@ document.addEventListener('DOMContentLoaded', () => {
       try{
         const data = JSON.parse(message.toString());
         if(topic.startsWith("pubs/requests/")){
-          // Always save to history as "queued"
+          // Add hasBeenAnnounced flag if not present
+          if (data.hasBeenAnnounced === undefined) {
+            data.hasBeenAnnounced = false;
+          }
           addJobToHistory(data, 'queued');
 
           const mode = localStorage.getItem('job_mode') || 'push';
-          if (mode === 'push' && !isJobActive) {
+          if (mode === 'push' && !isJobActive && !data.hasBeenAnnounced) {
+            // Mark as announced BEFORE showing
+            const jobIndex = driverJobs.findIndex(j => j.job === data.job);
+            if (jobIndex >= 0) {
+              driverJobs[jobIndex].hasBeenAnnounced = true;
+              saveJobs();
+            }
             showJobPanel(data);
           } else if (mode === 'pull') {
             statusEl.innerHTML = `<span class="gps-source gps-gps"></span>📥 New job queued: ${data.pubName}`;
@@ -1486,6 +1497,3 @@ document.addEventListener('DOMContentLoaded', () => {
   </script>
 </body>
 </html>
-
-
-
