@@ -975,6 +975,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('chatList').addEventListener('click', (e) => {
       const contact = e.target.closest('.contact-item');
       if (contact) {
+         e.stopPropagation(); // ✅ ADD THIS LINE
         const chatId = contact.dataset.chat;
         openChat(chatId);
       }
@@ -1497,3 +1498,4 @@ document.addEventListener('DOMContentLoaded', () => {
   </script>
 </body>
 </html>
+
