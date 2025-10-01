@@ -518,7 +518,7 @@
 <body>
   <div id="map"></div>
   <div id="headerBanner">
-    <div id="appTitle">Black Cab Unite v5.5</div>
+    <div id="appTitle">Black Cab Unite v5.4</div>
     <button id="menuBtn">☰</button>
   </div>
   <div id="status">Initializing...</div>
@@ -616,8 +616,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   document.body.addEventListener('click', initTTS, { once: true });
   document.body.addEventListener('touchstart', initTTS, { once: true });
-
-  // ✅ SWITCHED TO PORT 443 FOR UNIVERSAL COMPATIBILITY (iPhone, tablets, all networks)
+  // ✅ KEEP 8884 AS REQUESTED (tablet compatibility)
   const MQTT_BROKER = "wss://broker.hivemq.com:8884/mqtt";
   const REQUEST_TOPIC = "pubs/requests/+";
   const LOCATION_TOPIC = `drivers/${DRIVER_ID}/location`;
@@ -646,7 +645,6 @@ document.addEventListener('DOMContentLoaded', () => {
   let maxRadius = parseFloat(localStorage.getItem('max_radius_km') || '10');
   let isJobActive = false;
   let jobCooldown = false; // ← NEW: prevent immediate job switch
-
   // ✅ GLOBAL TIMER REFERENCE (PREVENT LEAKS)
   let jobTimerInterval = null;
   // ✅ JOB WAKE LOCK
@@ -660,17 +658,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const menuNavBtns = document.querySelectorAll('.menu-nav-btn');
   const loadingOverlay = document.getElementById('loadingOverlay');
   const micIndicator = document.getElementById('micIndicator');
-
-  // ===== SAFE LOCALSTORAGE =====
-  function safeSetItem(key, value) {
-    try {
-      localStorage.setItem(key, value);
-    } catch (e) {
-      console.warn("localStorage write failed (Private Mode or full?):", e);
-      statusEl.innerHTML = "⚠️ Storage full. Clear history in Settings.";
-    }
-  }
-
   // ===== ENHANCED TAXI MARKER (from v5.1) =====
   const BLACK_CAB_SVG = `
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 58 36" width="58" height="36">
@@ -699,7 +686,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   // ===== SAVE PENDING JOBS =====
   function savePendingJobs() {
-    safeSetItem(`pending_jobs_${DRIVER_ID}`, JSON.stringify(pendingJobs));
+    localStorage.setItem(`pending_jobs_${DRIVER_ID}`, JSON.stringify(pendingJobs));
   }
   // ===== SIMPLE GPS (STABLE) =====
   function calculateDistance(lat1, lon1, lat2, lon2) {
@@ -900,17 +887,17 @@ document.addEventListener('DOMContentLoaded', () => {
       </div>
     `;
 
-    // Navigation button
+    // Navigation button handler
     document.getElementById('navToPickupBtn').addEventListener('click', () => {
       const url = `https://www.google.com/maps/dir/?api=1&destination=${current.lat},${current.lng}`;
       window.open(url, '_blank');
     });
 
-    // Call button
+    // Call button handler
     document.getElementById('callCustomerBtn').addEventListener('click', () => {
-      const clean = current.customerPhone.replace(/\D/g, '');
-      if (clean) {
-        window.location.href = `tel:${clean}`;
+      const phone = current.customerPhone.replace(/\D/g, ''); // Remove non-digits
+      if (phone) {
+        window.location.href = `tel:${phone}`;
       } else {
         alert("Customer phone number not available.");
       }
@@ -918,7 +905,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   // ===== JOB HISTORY MANAGEMENT =====
   function saveJobs() {
-    safeSetItem(`driver_jobs_${DRIVER_ID}`, JSON.stringify(driverJobs));
+    localStorage.setItem(`driver_jobs_${DRIVER_ID}`, JSON.stringify(driverJobs));
   }
   function addJobToHistory(jobData, initialStatus = 'processing') {
     const job = {
@@ -1196,9 +1183,9 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   function saveChatMessages() {
     if (currentChat) {
-      safeSetItem(`chat_${currentChat}_${DRIVER_ID}`, JSON.stringify(chatMessages[currentChat] || []));
+      localStorage.setItem(`chat_${currentChat}_${DRIVER_ID}`, JSON.stringify(chatMessages[currentChat] || []));
     }
-    safeSetItem(`chat_group_${DRIVER_ID}`, JSON.stringify(chatMessages.group || []));
+    localStorage.setItem(`chat_group_${DRIVER_ID}`, JSON.stringify(chatMessages.group || []));
   }
   // ===== SETTINGS VIEW =====
   function renderSettingsView() {
@@ -1231,7 +1218,7 @@ document.addEventListener('DOMContentLoaded', () => {
         alert("Invalid driver ID. Use only letters, numbers, hyphens, and underscores.");
         return;
       }
-      safeSetItem('driver_id', newId);
+      localStorage.setItem('driver_id', newId);
       DRIVER_ID = newId;
       document.getElementById('currentDriverId').textContent = newId;
       if (client) {
@@ -1248,7 +1235,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
       maxRadius = radius;
-      safeSetItem('max_radius_km', radius.toString());
+      localStorage.setItem('max_radius_km', radius.toString());
       statusEl.innerHTML = `✅ Max radius set to ${radius} km`;
     });
     document.getElementById('clearJobsBtn').addEventListener('click', () => {
@@ -1279,16 +1266,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const c = (hash & 0x00FFFFFF).toString(16).toUpperCase();
     return "#" + "00000".substring(0, 6 - c.length) + c;
   }
-  // ===== SAFE TTS FUNCTION =====
-  function speakSafely(text) {
-    if (!('speechSynthesis' in window)) return;
-    setTimeout(() => {
-      const utter = new SpeechSynthesisUtterance(text);
-      utter.lang = 'en-GB';
-      utter.rate = 0.9;
-      speechSynthesis.speak(utter);
-    }, 100);
-  }
   // ===== VOICE LISTENER WITH MIC INDICATOR =====
   let speechRecognition = null;
   let retryCount = 0;
@@ -1316,17 +1293,14 @@ document.addEventListener('DOMContentLoaded', () => {
       const transcript = event.results[0][0].transcript.toLowerCase().trim();
       if (/\baccept\b/.test(transcript) && !/\breject\b/.test(transcript)) {
         respondToJob(true);
-        speakSafely("Job accepted. Thank you.");
+        speakFeedback("Job accepted. Thank you.");
       } else if (/\breject\b/.test(transcript)) {
         respondToJob(false);
-        speakSafely("Job rejected. Understood.");
+        speakFeedback("Job rejected. Understood.");
       }
     };
     speechRecognition.onerror = (e) => {
-      hideMicIndicator();
-      if (e.error === 'not-allowed') {
-        statusEl.innerHTML = '🎤 Mic access denied. Enable in Settings.';
-      } else if (e.error !== 'aborted') {
+      if (e.error !== 'aborted') {
         console.error("Voice error:", e.error);
         retryCount++;
         if (retryCount > MAX_RETRIES) speechRecognition = null;
@@ -1358,6 +1332,20 @@ document.addEventListener('DOMContentLoaded', () => {
       speechRecognition = null;
     }
   }
+  function speakFeedback(message) {
+    if (!('speechSynthesis' in window)) return;
+    const utterance = new SpeechSynthesisUtterance(message);
+    utterance.lang = 'en-GB';
+    utterance.rate = 0.9;
+    if (speechRecognition) speechRecognition.abort();
+    utterance.onend = () => {
+      if (jobPanel.style.display === 'block') {
+        startVoiceListener();
+      }
+    };
+    speechSynthesis.cancel();
+    speechSynthesis.speak(utterance);
+  }
   // ===== STRICT FIFO JOB QUEUE WITH COOLDOWN =====
   function processNextJob() {
     if (isJobActive || jobCooldown || pendingJobs.length === 0) return;
@@ -1366,17 +1354,20 @@ document.addEventListener('DOMContentLoaded', () => {
     showJobPanel(job);
   }
   function showJobPanel(job) {
+    // ✅ CLEAN UP PREVIOUS STATE
     if (jobTimerInterval) {
       clearInterval(jobTimerInterval);
       jobTimerInterval = null;
     }
     stopVoiceListener();
     currentJob = null;
+    // ✅ FRESH START
     isJobActive = true;
     currentJob = job;
     jobPanel.style.display = 'block';
     pickupLocation.textContent = `${job.pubName} (${job.lat.toFixed(5)}, ${job.lng.toFixed(5)})`;
     customerPhone.textContent = job.customerPhone;
+    // Timer
     const timerEl = document.getElementById('jobTimer');
     const secondsEl = document.getElementById('timerSeconds');
     timerEl.style.display = 'block';
@@ -1398,7 +1389,24 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 1500);
       }
     }, 1000);
-    speakSafely(`New job! Pickup at ${job.pubName}. Customer phone: ${job.customerPhone}`);
+    // TTS → THEN MIC
+    if ('speechSynthesis' in window) {
+      const utterance = new SpeechSynthesisUtterance(
+        `New job! Pickup at ${job.pubName}. Customer phone: ${job.customerPhone}`
+      );
+      utterance.lang = 'en-GB';
+      utterance.rate = 0.9;
+      utterance.onend = () => {
+        if (isJobActive && jobPanel.style.display === 'block') {
+          startVoiceListener();
+        }
+      };
+      speechSynthesis.cancel();
+      speechSynthesis.speak(utterance);
+    } else {
+      startVoiceListener();
+    }
+    // ✅ PREVENT SCREEN SLEEP DURING JOB OFFER
     async function requestJobWakeLock() {
       if ('wakeLock' in navigator) {
         try {
@@ -1424,6 +1432,7 @@ document.addEventListener('DOMContentLoaded', () => {
     isJobActive = false;
     if (pickupMarker) { map.removeLayer(pickupMarker); pickupMarker = null; }
     if (routeLine) { map.removeLayer(routeLine); routeLine = null; }
+    // ✅ RELEASE JOB WAKE LOCK
     if (jobWakeLock) {
       jobWakeLock.release();
       jobWakeLock = null;
@@ -1455,7 +1464,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!isJobActive && pendingJobs.length > 0) {
         processNextJob();
       }
-    }, 2500);
+    }, 2500); // 2.5 second grace period
   }
   // ===== MQTT =====
   function connectMQTT() {
@@ -1473,6 +1482,7 @@ document.addEventListener('DOMContentLoaded', () => {
       client.subscribe(CHAT_PRIVATE_TOPIC);
       client.subscribe(JOB_RESULT_TOPIC);
       setInterval(cleanupOldDrivers, 30000);
+      // Auto-clean expired pending jobs
       setInterval(() => {
         const now = Date.now();
         let changed = false;
@@ -1491,6 +1501,7 @@ document.addEventListener('DOMContentLoaded', () => {
       try {
         const data = JSON.parse(message.toString());
         if (topic.startsWith("pubs/requests/")) {
+          // Radius filter
           if (driverCoords) {
             const dist = calculateDistance(driverCoords.lat, driverCoords.lng, data.lat, data.lng);
             if (dist > maxRadius * 1000) {
@@ -1505,9 +1516,11 @@ document.addEventListener('DOMContentLoaded', () => {
               return;
             }
           }
+          // ✅ ADD TO BACK OF QUEUE (NEVER DIRECT TO MODAL)
           pendingJobs.push({ ...data, receivedAt: Date.now() });
           savePendingJobs();
           addJobToHistory(data, 'queued');
+          // ✅ PROCESS ONLY IF NO ACTIVE JOB AND NO COOLDOWN
           if (!isJobActive && !jobCooldown) {
             processNextJob();
           }
@@ -1519,7 +1532,11 @@ document.addEventListener('DOMContentLoaded', () => {
             updateJobStatus(jobId, 'allocated');
             const modal = document.getElementById('jobWonModal');
             modal.style.display = 'flex';
-            speakSafely("You won the job!");
+            if ('speechSynthesis' in window) {
+              const utterance = new SpeechSynthesisUtterance("You won the job!");
+              utterance.lang = 'en-GB';
+              speechSynthesis.speak(utterance);
+            }
             document.getElementById('closeJobWonModal').onclick = () => {
               modal.style.display = 'none';
             };
@@ -1640,4 +1657,3 @@ document.addEventListener('DOMContentLoaded', () => {
   </script>
 </body>
 </html>
-
