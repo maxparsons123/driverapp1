@@ -36,6 +36,11 @@
       z-index: 1001;
       box-shadow: 0 2px 8px rgba(0,0,0,0.3);
     }
+    #appTitleContainer {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+    }
     #appTitle {
       font-weight: 700;
       font-size: 18px;
@@ -49,6 +54,22 @@
       content: "🚕";
       font-size: 20px;
     }
+    #statusCaption {
+      font-size: 12px;
+      color: #FFD700;
+      margin-top: 4px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+    .status-available .status-dot { background: #28a745; }
+    .status-busy .status-dot { background: #ffc107; }
+    .status-offline .status-dot { background: #dc3545; }
     #menuBtn {
       background: #FFD700;
       color: #000;
@@ -520,7 +541,12 @@
 <body>
   <div id="map"></div>
   <div id="headerBanner">
-    <div id="appTitle">Black Cab Unite v5.4</div>
+    <div id="appTitleContainer">
+      <div id="appTitle">Black Cab Unite v5.4</div>
+      <div id="statusCaption" class="status-available">
+        <span class="status-dot"></span> Available
+      </div>
+    </div>
     <button id="menuBtn">☰</button>
   </div>
   <!-- Status Dropdown -->
@@ -606,8 +632,24 @@
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
   <script>
 document.addEventListener('DOMContentLoaded', () => {
+  // ===== SAFE LOCALSTORAGE WRAPPER =====
+  function safeSetItem(key, value) {
+    try {
+      localStorage.setItem(key, value);
+    } catch (e) {
+      console.warn("localStorage not available (preview mode)");
+    }
+  }
+  function safeGetItem(key) {
+    try {
+      return localStorage.getItem(key);
+    } catch (e) {
+      return null;
+    }
+  }
+
   // ===== Driver Registration =====
-  let DRIVER_ID = localStorage.getItem('driver_id');
+  let DRIVER_ID = safeGetItem('driver_id');
   function validateDriverId(id) {
     if (!id) return false;
     return /^[a-zA-Z0-9_-]+$/.test(id);
@@ -620,11 +662,8 @@ document.addEventListener('DOMContentLoaded', () => {
         break;
       }
     }
-    localStorage.setItem('driver_id', DRIVER_ID);
+    safeSetItem('driver_id', DRIVER_ID);
   }
-  // ===== Driver Presence =====
-  let driverPresence = localStorage.getItem('driver_presence') || 'available';
-  
   // ===== TTS INITIALIZER =====
   let ttsInitialized = false;
   function initTTS() {
@@ -644,7 +683,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const CHAT_GROUP_TOPIC = "chat/group";
   const CHAT_PRIVATE_TOPIC = `chat/private/${DRIVER_ID}/+`;
   const JOB_RESULT_TOPIC = `jobs/+/result/${DRIVER_ID}`;
-  const STATUS_TOPIC = `drivers/${DRIVER_ID}/status`;
   let driverCoords = null;
   let map = null;
   let driverMarker = null;
@@ -659,12 +697,13 @@ document.addEventListener('DOMContentLoaded', () => {
   let wakeLock = null;
   const otherDrivers = {};
   const driverStatus = {};
-  const chatMessages = { group: JSON.parse(localStorage.getItem(`chat_group_${DRIVER_ID}`)) || [] };
+  const chatMessages = { group: JSON.parse(safeGetItem(`chat_group_${DRIVER_ID}`)) || [] };
   const unreadCounts = { group: 0 };
-  let driverJobs = JSON.parse(localStorage.getItem(`driver_jobs_${DRIVER_ID}`)) || [];
-  let pendingJobs = JSON.parse(localStorage.getItem(`pending_jobs_${DRIVER_ID}`)) || [];
-  let maxRadius = parseFloat(localStorage.getItem('max_radius_km') || '10');
+  let driverJobs = JSON.parse(safeGetItem(`driver_jobs_${DRIVER_ID}`)) || [];
+  let pendingJobs = JSON.parse(safeGetItem(`pending_jobs_${DRIVER_ID}`)) || [];
+  let maxRadius = parseFloat(safeGetItem('max_radius_km') || '10');
   let isJobActive = false;
+  let jobResponseSent = false;
   // ✅ GLOBAL TIMER REFERENCE (PREVENT LEAKS)
   let jobTimerInterval = null;
   // ✅ JOB WAKE LOCK
@@ -706,7 +745,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   // ===== SAVE PENDING JOBS =====
   function savePendingJobs() {
-    localStorage.setItem(`pending_jobs_${DRIVER_ID}`, JSON.stringify(pendingJobs));
+    safeSetItem(`pending_jobs_${DRIVER_ID}`, JSON.stringify(pendingJobs));
   }
   // ===== SIMPLE GPS (STABLE) =====
   function calculateDistance(lat1, lon1, lat2, lon2) {
@@ -907,7 +946,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   // ===== JOB HISTORY MANAGEMENT =====
   function saveJobs() {
-    localStorage.setItem(`driver_jobs_${DRIVER_ID}`, JSON.stringify(driverJobs));
+    safeSetItem(`driver_jobs_${DRIVER_ID}`, JSON.stringify(driverJobs));
   }
   function addJobToHistory(jobData, initialStatus = 'processing') {
     const job = {
@@ -1111,9 +1150,9 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   function saveChatMessages() {
     if (currentChat) {
-      localStorage.setItem(`chat_${currentChat}_${DRIVER_ID}`, JSON.stringify(chatMessages[currentChat] || []));
+      safeSetItem(`chat_${currentChat}_${DRIVER_ID}`, JSON.stringify(chatMessages[currentChat] || []));
     }
-    localStorage.setItem(`chat_group_${DRIVER_ID}`, JSON.stringify(chatMessages.group || []));
+    safeSetItem(`chat_group_${DRIVER_ID}`, JSON.stringify(chatMessages.group || []));
   }
   // ===== SETTINGS VIEW =====
   function renderSettingsView() {
@@ -1146,7 +1185,7 @@ document.addEventListener('DOMContentLoaded', () => {
         alert("Invalid driver ID. Use only letters, numbers, hyphens, and underscores.");
         return;
       }
-      localStorage.setItem('driver_id', newId);
+      safeSetItem('driver_id', newId);
       DRIVER_ID = newId;
       document.getElementById('currentDriverId').textContent = newId;
       if (client) {
@@ -1163,7 +1202,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
       maxRadius = radius;
-      localStorage.setItem('max_radius_km', radius.toString());
+      safeSetItem('max_radius_km', radius.toString());
       statusEl.innerHTML = `✅ Max radius set to ${radius} km`;
     });
     document.getElementById('clearJobsBtn').addEventListener('click', () => {
@@ -1282,20 +1321,17 @@ document.addEventListener('DOMContentLoaded', () => {
     showJobPanel(job);
   }
   function showJobPanel(job) {
-    // ✅ CLEAN UP PREVIOUS STATE
     if (jobTimerInterval) {
       clearInterval(jobTimerInterval);
       jobTimerInterval = null;
     }
     stopVoiceListener();
     currentJob = null;
-    // ✅ FRESH START
     isJobActive = true;
     currentJob = job;
     jobPanel.style.display = 'block';
     pickupLocation.textContent = `${job.pubName} (${job.lat.toFixed(5)}, ${job.lng.toFixed(5)})`;
     customerPhone.textContent = job.customerPhone;
-    // Timer
     const timerEl = document.getElementById('jobTimer');
     const secondsEl = document.getElementById('timerSeconds');
     timerEl.style.display = 'block';
@@ -1311,7 +1347,6 @@ document.addEventListener('DOMContentLoaded', () => {
         processNextJob();
       }
     }, 1000);
-    // TTS → THEN MIC
     if ('speechSynthesis' in window) {
       const utterance = new SpeechSynthesisUtterance(
         `New job! Pickup at ${job.pubName}. Customer phone: ${job.customerPhone}`
@@ -1328,7 +1363,6 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
       startVoiceListener();
     }
-    // ✅ PREVENT SCREEN SLEEP DURING JOB OFFER
     async function requestJobWakeLock() {
       if ('wakeLock' in navigator) {
         try {
@@ -1354,14 +1388,14 @@ document.addEventListener('DOMContentLoaded', () => {
     isJobActive = false;
     if (pickupMarker) { map.removeLayer(pickupMarker); pickupMarker = null; }
     if (routeLine) { map.removeLayer(routeLine); routeLine = null; }
-    // ✅ RELEASE JOB WAKE LOCK
     if (jobWakeLock) {
       jobWakeLock.release();
       jobWakeLock = null;
     }
   }
   function respondToJob(accepted) {
-    if (!currentJob || !client) return;
+    if (!currentJob || !client || jobResponseSent) return;
+    jobResponseSent = true;
     if (accepted) {
       const payload = {
         job: currentJob.job,
@@ -1381,7 +1415,48 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     cleanupJob();
     processNextJob();
+    setTimeout(() => { jobResponseSent = false; }, 5000);
   }
+  // ===== DRIVER PRESENCE =====
+  let driverPresence = safeGetItem('driver_presence') || 'available';
+  
+  function updateStatusCaption(status) {
+    const caption = document.getElementById('statusCaption');
+    caption.className = `status-${status}`;
+    caption.innerHTML = `
+      <span class="status-dot"></span> 
+      ${status.charAt(0).toUpperCase() + status.slice(1)}
+    `;
+  }
+  
+  function setDriverPresence(status) {
+    if (!['available', 'busy', 'offline'].includes(status)) return;
+    driverPresence = status;
+    safeSetItem('driver_presence', status);
+    updateStatusCaption(status);
+    const statusText = status.charAt(0).toUpperCase() + status.slice(1);
+    statusEl.innerHTML = `<span class="gps-source gps-gps"></span>Presence: ${statusText}`;
+    if (status === 'offline' && gpsWatchId) {
+      navigator.geolocation.clearWatch(gpsWatchId);
+      gpsWatchId = null;
+    } else if (status !== 'offline' && !gpsWatchId) {
+      initGPS();
+    }
+    if (client && client.connected) {
+      client.publish(`drivers/${DRIVER_ID}/status`, JSON.stringify({
+        driver: DRIVER_ID,
+        status: status,
+        ts: Date.now()
+      }));
+    }
+  }
+  
+  function handleLogOff() {
+    setDriverPresence('offline');
+    document.getElementById('statusDropdown').style.display = 'none';
+    statusEl.innerHTML = '<span class="gps-source gps-poor"></span>✅ You are now logged off (offline)';
+  }
+
   // ===== MQTT =====
   function connectMQTT() {
     statusEl.innerHTML = `<span class="gps-source gps-poor"></span>Connecting to MQTT as: ${DRIVER_ID}`;
@@ -1399,14 +1474,13 @@ document.addEventListener('DOMContentLoaded', () => {
       client.subscribe(JOB_RESULT_TOPIC);
       
       // Publish initial status
-      client.publish(STATUS_TOPIC, JSON.stringify({
+      client.publish(`drivers/${DRIVER_ID}/status`, JSON.stringify({
         driver: DRIVER_ID,
         status: driverPresence,
         ts: Date.now()
       }));
       
       setInterval(cleanupOldDrivers, 30000);
-      // Auto-clean expired pending jobs
       setInterval(() => {
         const now = Date.now();
         let changed = false;
@@ -1425,12 +1499,7 @@ document.addEventListener('DOMContentLoaded', () => {
       try {
         const data = JSON.parse(message.toString());
         if (topic.startsWith("pubs/requests/")) {
-          // ✅ RESPECT DRIVER PRESENCE
-          if (driverPresence === 'offline') {
-            return; // silently ignore
-          }
-
-          // Radius filter
+          if (driverPresence === 'offline') return;
           if (driverCoords) {
             const dist = calculateDistance(driverCoords.lat, driverCoords.lng, data.lat, data.lng);
             if (dist > maxRadius * 1000) {
@@ -1445,22 +1514,18 @@ document.addEventListener('DOMContentLoaded', () => {
               return;
             }
           }
-
           pendingJobs.push({ ...data, receivedAt: Date.now() });
           savePendingJobs();
           addJobToHistory(data, 'queued');
-
           if (driverPresence === 'available' && !isJobActive) {
             processNextJob();
           } else if (driverPresence === 'busy') {
-            // Notify driver
             if ('speechSynthesis' in window) {
               const u = new SpeechSynthesisUtterance("New job queued. You are set to busy.");
               u.lang = 'en-GB';
               u.rate = 0.9;
               speechSynthesis.speak(u);
             }
-            // Visual cue
             const btn = document.getElementById('menuBtn');
             btn.style.transform = 'scale(1.1)';
             btn.style.backgroundColor = '#ff6b35';
@@ -1574,42 +1639,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     if (isMenuOpen && currentView === 'chat') updateChatList();
   }
-  // ===== DRIVER PRESENCE MANAGEMENT =====
-  function setDriverPresence(status) {
-    if (!['available', 'busy', 'offline'].includes(status)) return;
-    driverPresence = status;
-    localStorage.setItem('driver_presence', status);
-    
-    // Update status bar
-    const statusText = status.charAt(0).toUpperCase() + status.slice(1);
-    statusEl.innerHTML = `<span class="gps-source gps-gps"></span>Presence: ${statusText}`;
-    
-    // Stop GPS if offline
-    if (status === 'offline') {
-      if (gpsWatchId) {
-        navigator.geolocation.clearWatch(gpsWatchId);
-        gpsWatchId = null;
-      }
-    } else if (!gpsWatchId) {
-      initGPS();
-    }
-    
-    // Publish status
-    if (client && client.connected) {
-      client.publish(STATUS_TOPIC, JSON.stringify({
-        driver: DRIVER_ID,
-        status: status,
-        ts: Date.now()
-      }));
-    }
-  }
-  
-  function handleLogOff() {
-    setDriverPresence('offline');
-    document.getElementById('statusDropdown').style.display = 'none';
-    statusEl.innerHTML = '<span class="gps-source gps-poor"></span>✅ You are now logged off (offline)';
-  }
-  
   // ===== EVENT LISTENERS =====
   document.getElementById('acceptBtn').addEventListener('click', () => respondToJob(true));
   document.getElementById('rejectBtn').addEventListener('click', () => respondToJob(false));
@@ -1660,6 +1689,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (gpsWatchId) navigator.geolocation.clearWatch(gpsWatchId);
     releaseWakeLock();
   });
+  
+  // Initialize status caption
+  updateStatusCaption(driverPresence);
   initMapImmediately();
   renderCurrentJob();
 });
