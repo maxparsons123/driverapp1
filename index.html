@@ -618,7 +618,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.body.addEventListener('touchstart', initTTS, { once: true });
 
   // ✅ SWITCHED TO PORT 443 FOR UNIVERSAL COMPATIBILITY (iPhone, tablets, all networks)
-  const MQTT_BROKER = "wss://broker.hivemq.com:443/mqtt";
+  const MQTT_BROKER = "wss://broker.hivemq.com:8884/mqtt";
   const REQUEST_TOPIC = "pubs/requests/+";
   const LOCATION_TOPIC = `drivers/${DRIVER_ID}/location`;
   const DRIVERS_LOCATION_TOPIC = "drivers/+/location";
@@ -1640,3 +1640,4 @@ document.addEventListener('DOMContentLoaded', () => {
   </script>
 </body>
 </html>
+
