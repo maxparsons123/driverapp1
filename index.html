@@ -964,20 +964,16 @@ function renderCurrentJob() {
     </div>
   `;
 
-  // Navigation button handler
+  // Navigation
   document.getElementById('navToPickupBtn').addEventListener('click', () => {
-    const url = `https://www.google.com/maps/dir/?api=1&destination=${current.lat},${current.lng}`;
-    window.open(url, '_blank');
+    window.open(`https://www.google.com/maps/dir/?api=1&destination=${current.lat},${current.lng}`, '_blank');
   });
 
-  // Call button handler
+  // Call
   document.getElementById('callCustomerBtn').addEventListener('click', () => {
-    const phone = current.customerPhone.replace(/\D/g, ''); // Remove non-digits
-    if (phone) {
-      window.location.href = `tel:${phone}`;
-    } else {
-      alert("Customer phone number not available.");
-    }
+    const clean = current.customerPhone.replace(/\D/g, '');
+    if (clean) window.location.href = `tel:${clean}`;
+    else alert("No valid phone number.");
   });
 }
   // ===== JOB HISTORY MANAGEMENT =====
@@ -1429,23 +1425,52 @@ function renderCurrentJob() {
     savePendingJobs();
     showJobPanel(job);
   }
-  function showJobPanel(job) {
-    // ✅ CLEAN UP PREVIOUS STATE
-    if (jobTimerInterval) {
-      clearInterval(jobTimerInterval);
-      jobTimerInterval = null;
-    }
-    stopVoiceListener();
-    currentJob = null;
-    // ✅ FRESH START
-    isJobActive = true;
-    currentJob = job;
-    jobPanel.style.display = 'block';
-    pickupLocation.textContent = `${job.pubName} (${job.lat.toFixed(5)}, ${job.lng.toFixed(5)})`;
-    customerPhone.textContent = job.customerPhone;
-    // Timer
-    const timerEl = document.getElementById('jobTimer');
-    const secondsEl = document.getElementById('timerSeconds');
+ function showJobPanel(job) {
+  if (jobTimerInterval) {
+    clearInterval(jobTimerInterval);
+    jobTimerInterval = null;
+  }
+  stopVoiceListener();
+  currentJob = null;
+  isJobActive = true;
+  currentJob = job;
+  jobPanel.style.display = 'block';
+  pickupLocation.textContent = `${job.pubName} (${job.lat.toFixed(5)}, ${job.lng.toFixed(5)})`;
+  customerPhone.textContent = job.customerPhone;
+
+  // Hide timer initially
+  const timerEl = document.getElementById('jobTimer');
+  const secondsEl = document.getElementById('timerSeconds');
+  timerEl.style.display = 'none';
+
+  // TTS first
+  if ('speechSynthesis' in window) {
+    const utterance = new SpeechSynthesisUtterance(
+      `New job! Pickup at ${job.pubName}. Customer phone: ${job.customerPhone}`
+    );
+    utterance.lang = 'en-GB';
+    utterance.rate = 0.9;
+    utterance.onend = () => {
+      // ✅ START TIMER AFTER TTS FINISHES
+      timerEl.style.display = 'block';
+      secondsEl.textContent = '30';
+      let secondsLeft = 30;
+      jobTimerInterval = setInterval(() => {
+        secondsLeft--;
+        secondsEl.textContent = secondsLeft;
+        if (secondsLeft <= 0) {
+          clearInterval(jobTimerInterval);
+          jobTimerInterval = null;
+          cleanupJob();
+          processNextJob();
+        }
+      }, 1000);
+      startVoiceListener();
+    };
+    speechSynthesis.cancel();
+    speechSynthesis.speak(utterance);
+  } else {
+    // No TTS? Start timer immediately
     timerEl.style.display = 'block';
     secondsEl.textContent = '30';
     let secondsLeft = 30;
@@ -1459,38 +1484,22 @@ function renderCurrentJob() {
         processNextJob();
       }
     }, 1000);
-    // TTS → THEN MIC
-    if ('speechSynthesis' in window) {
-      const utterance = new SpeechSynthesisUtterance(
-        `New job! Pickup at ${job.pubName}. Customer phone: ${job.customerPhone}`
-      );
-      utterance.lang = 'en-GB';
-      utterance.rate = 0.9;
-      utterance.onend = () => {
-        if (isJobActive && jobPanel.style.display === 'block') {
-          startVoiceListener();
-        }
-      };
-      speechSynthesis.cancel();
-      speechSynthesis.speak(utterance);
-    } else {
-      startVoiceListener();
-    }
-    // ✅ PREVENT SCREEN SLEEP DURING JOB OFFER
-    async function requestJobWakeLock() {
-      if ('wakeLock' in navigator) {
-        try {
-          jobWakeLock = await navigator.wakeLock.request('screen');
-          jobWakeLock.addEventListener('release', () => {
-            jobWakeLock = null;
-          });
-        } catch (err) {
-          console.warn('Job Wake Lock failed:', err);
-        }
+    startVoiceListener();
+  }
+
+  // Wake Lock
+  async function requestJobWakeLock() {
+    if ('wakeLock' in navigator) {
+      try {
+        jobWakeLock = await navigator.wakeLock.request('screen');
+        jobWakeLock.addEventListener('release', () => { jobWakeLock = null; });
+      } catch (err) {
+        console.warn('Job Wake Lock failed:', err);
       }
     }
-    requestJobWakeLock();
   }
+  requestJobWakeLock();
+}
   function cleanupJob() {
     if (jobTimerInterval) {
       clearInterval(jobTimerInterval);
@@ -1795,4 +1804,5 @@ function renderCurrentJob() {
   </script>
 </body>
 </html>
+
 
