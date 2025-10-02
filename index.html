@@ -915,66 +915,71 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     renderCurrentView();
   }
-  function renderCurrentView() {
-    if (!isMenuOpen) return;
-    if (currentView === 'currentJob') {
-      renderCurrentJob();
-    } else if (currentView === 'jobHistory') {
-      renderJobHistory();
-    } else if (currentView === 'chat') {
-      renderChatView();
-    } else if (currentView === 'settings') {
-      renderSettingsView();
-    }
-  }
-  // ===== CURRENT JOB VIEW =====
-  function renderCurrentJob() {
-    const allocatedJobs = driverJobs.filter(job => job.status === 'allocated');
-    if (allocatedJobs.length === 0) {
-      menuContent.innerHTML = `
-        <div class="no-current-job">
-          <div class="icon">🚕</div>
-          <div>No active jobs</div>
-          <div style="font-size: 14px; color: #666; margin-top: 12px;">You'll see your current job here once allocated</div>
-        </div>
-      `;
-      return;
-    }
-    const current = allocatedJobs[0];
+function renderCurrentJob() {
+  const allocatedJobs = driverJobs.filter(job => job.status === 'allocated');
+  if (allocatedJobs.length === 0) {
     menuContent.innerHTML = `
-      <div class="current-job-info">
-        <div class="job-detail">
-          <div class="job-label">Job ID</div>
-          <div class="job-value">${current.job}</div>
-        </div>
-        <div class="job-detail">
-          <div class="job-label">Pub</div>
-          <div class="job-value">${current.pubName}</div>
-        </div>
-        <div class="job-detail">
-          <div class="job-label">Customer Phone</div>
-          <div class="job-value">📞 ${current.customerPhone}</div>
-        </div>
-        <div class="job-detail">
-          <div class="job-label">Pickup Location</div>
-          <div class="job-value">📍 ${current.lat.toFixed(5)}, ${current.lng.toFixed(5)}</div>
-        </div>
-        <div class="job-detail">
-          <div class="job-label">Status</div>
-          <div class="job-value">
-            <span class="job-status status-allocated">ALLOCATED</span>
-          </div>
-        </div>
-        <div class="job-detail">
-          <div class="job-label">Received</div>
-          <div class="job-value">${new Date(current.timestamp).toLocaleString()}</div>
-        </div>
-      </div>
-      <div style="text-align: center; padding: 16px;">
-        <button class="settings-btn" onclick="markJobCompleted('${current.job}')">Mark as Completed</button>
+      <div class="no-current-job">
+        <div class="icon">🚕</div>
+        <div>No active jobs</div>
+        <div style="font-size: 14px; color: #666; margin-top: 12px;">You'll see your current job here once allocated</div>
       </div>
     `;
+    return;
   }
+  const current = allocatedJobs[0];
+  menuContent.innerHTML = `
+    <div class="current-job-info">
+      <div class="job-detail">
+        <div class="job-label">Job ID</div>
+        <div class="job-value">${current.job}</div>
+      </div>
+      <div class="job-detail">
+        <div class="job-label">Pub</div>
+        <div class="job-value">${current.pubName}</div>
+      </div>
+      <div class="job-detail">
+        <div class="job-label">Customer Phone</div>
+        <div class="job-value">📞 ${current.customerPhone}</div>
+      </div>
+      <div class="job-detail">
+        <div class="job-label">Pickup Location</div>
+        <div class="job-value">📍 ${current.lat.toFixed(5)}, ${current.lng.toFixed(5)}</div>
+      </div>
+      <div class="job-detail">
+        <div class="job-label">Status</div>
+        <div class="job-value">
+          <span class="job-status status-allocated">ALLOCATED</span>
+        </div>
+      </div>
+      <div class="job-detail">
+        <div class="job-label">Received</div>
+        <div class="job-value">${new Date(current.timestamp).toLocaleString()}</div>
+      </div>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 12px;">
+      <button class="settings-btn" id="navToPickupBtn">🧭 Navigate to Pickup</button>
+      <button class="settings-btn" id="callCustomerBtn" style="background:#28a745;">📞 Call Customer</button>
+      <button class="settings-btn" onclick="markJobCompleted('${current.job}')">Mark as Completed</button>
+    </div>
+  `;
+
+  // Navigation button handler
+  document.getElementById('navToPickupBtn').addEventListener('click', () => {
+    const url = `https://www.google.com/maps/dir/?api=1&destination=${current.lat},${current.lng}`;
+    window.open(url, '_blank');
+  });
+
+  // Call button handler
+  document.getElementById('callCustomerBtn').addEventListener('click', () => {
+    const phone = current.customerPhone.replace(/\D/g, ''); // Remove non-digits
+    if (phone) {
+      window.location.href = `tel:${phone}`;
+    } else {
+      alert("Customer phone number not available.");
+    }
+  });
+}
   // ===== JOB HISTORY MANAGEMENT =====
   function saveJobs() {
     safeSetItem(`driver_jobs_${DRIVER_ID}`, JSON.stringify(driverJobs));
@@ -1790,3 +1795,4 @@ document.addEventListener('DOMContentLoaded', () => {
   </script>
 </body>
 </html>
+
