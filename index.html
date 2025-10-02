@@ -52,7 +52,7 @@
       let maxRadius    = parseFloat(localStorage.getItem('max_radius_km') || '10');
 
       /* ---------- 1-c  MQTT port 8883 (WSS) ---------- */
-      const MQTT_BROKER = 'wss://broker.hivemq.com:8883/mqtt';
+      const MQTT_BROKER = "wss://broker.hivemq.com:8884/mqtt";
 
       /* ---------- 1-d  global timer ref ---------- */
       let jobTimerInterval = null;
@@ -234,3 +234,4 @@
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
 </body>
 </html>
+
